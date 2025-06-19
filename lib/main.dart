@@ -1,122 +1,326 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final prefs = await SharedPreferences.getInstance();
+  final greeted = prefs.getBool('greeted') ?? false;
+  runApp(MyApp(greeted: greeted));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool greeted;
+  const MyApp({super.key, required this.greeted});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+    return CupertinoApp(
+      title: 'ZYNC',
+      theme: const CupertinoThemeData(
+        brightness: Brightness.dark,
+        primaryColor: CupertinoColors.activeBlue,
+        scaffoldBackgroundColor: CupertinoColors.black,
+        textTheme: CupertinoTextThemeData(
+          textStyle: TextStyle(
+            color: CupertinoColors.white,
+            fontSize: 17,
+            fontFamily: 'Barlow',
+          ),
+        ),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: greeted ? const HomeScreen() : const SplashScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+    _animation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+    _controller.forward();
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        Future.delayed(const Duration(seconds: 1), () {
+          _controller.reverse();
+        });
+      } else if (status == AnimationStatus.dismissed) {
+        Navigator.of(context).pushReplacement(
+          CupertinoPageRoute(builder: (_) => const GreetingScreen()),
+        );
+      }
     });
   }
 
   @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+    return CupertinoPageScaffold(
+      backgroundColor: CupertinoColors.black,
+      child: Center(
+        child: FadeTransition(
+          opacity: _animation,
+          child: const Text(
+            'ZYNC',
+            style: TextStyle(
+              color: CupertinoColors.white,
+              fontSize: 48,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 8,
+              fontFamily: 'Barlow',
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class GreetingScreen extends StatefulWidget {
+  const GreetingScreen({super.key});
+
+  @override
+  State<GreetingScreen> createState() => _GreetingScreenState();
+}
+
+class _GreetingScreenState extends State<GreetingScreen> {
+  final TextEditingController _controller = TextEditingController();
+  String? _greetedName;
+  bool _acceptedTerms = false;
+  bool _loading = false;
+
+  void _submit() async {
+    final name = _controller.text.trim();
+    if (name.isNotEmpty && _acceptedTerms) {
+      setState(() {
+        _loading = true;
+      });
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('greeted', true);
+      await prefs.setString('username', name);
+      setState(() {
+        _greetedName = name;
+        _loading = false;
+      });
+      // Optionally, navigate to HomeScreen after greeting
+      Future.delayed(const Duration(seconds: 1), () {
+        Navigator.of(context).pushReplacement(
+          CupertinoPageRoute(builder: (_) => const HomeScreen()),
+        );
+      });
+    }
+  }
+
+  bool get _canContinue =>
+      _controller.text.trim().isNotEmpty && _acceptedTerms && !_loading;
+
+  void _openTerms() {
+    // Show a Cupertino dialog or push a new page with terms
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Terms and Conditions'),
+        content: const Text('Here are the terms and conditions...'),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Close'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: CupertinoColors.black,
+      child: SafeArea(
+        child: Stack(
+          children: [
+            // ZYNC at the top
+            Positioned(
+              top: 32,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  'ZYNC',
+                  style: const TextStyle(
+                    color: CupertinoColors.white,
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 8,
+                    fontFamily: 'Barlow',
+                  ),
+                ),
+              ),
+            ),
+            // Main content
+            Center(
+              child: _greetedName == null
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 80),
+                        const Text(
+                          'What should we call you?',
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w500,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: 250,
+                          child: CupertinoTextField(
+                            controller: _controller,
+                            placeholder: 'Enter your name',
+                            style: const TextStyle(
+                              color: CupertinoColors.white,
+                              fontFamily: 'Barlow',
+                            ),
+                            placeholderStyle: const TextStyle(
+                              color: CupertinoColors.systemGrey,
+                              fontFamily: 'Barlow',
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                              horizontal: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: CupertinoColors.darkBackgroundGray,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                            onSubmitted: (_) => _submit(),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        CupertinoButton.filled(
+                          onPressed: _canContinue ? _submit : null,
+                          child: _loading
+                              ? const CupertinoActivityIndicator()
+                              : const Text(
+                                  'Continue',
+                                  style: TextStyle(fontFamily: 'Barlow'),
+                                ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 80),
+                        Text(
+                          'Hello, $_greetedName!',
+                          style: const TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Welcome to ZYNC.',
+                          style: TextStyle(
+                            color: CupertinoColors.systemGrey,
+                            fontSize: 18,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            // Accept Terms and Conditions at the bottom
+            if (_greetedName == null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 32,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CupertinoSwitch(
+                      value: _acceptedTerms,
+                      onChanged: (val) {
+                        setState(() {
+                          _acceptedTerms = val;
+                        });
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Flexible(
+                      child: GestureDetector(
+                        onTap: _openTerms,
+                        child: const Text(
+                          'Accept Terms and Conditions',
+                          style: TextStyle(
+                            color: CupertinoColors.activeBlue,
+                            fontSize: 16,
+                            fontFamily: 'Barlow',
+                            decoration: TextDecoration.underline,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+    );
+  }
+}
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: CupertinoColors.black,
+      child: Center(
+        child: Text(
+          'Welcome to ZYNC!',
+          style: const TextStyle(
+            color: CupertinoColors.white,
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Barlow',
+          ),
+        ),
+      ),
     );
   }
 }
