@@ -6,78 +6,109 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 
 // Global theme state
-String currentAppTheme = 'Dark Theme';
+ThemeMode currentThemeMode = ThemeMode.system;
+String currentThemeName = 'System Default';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final greeted = prefs.getBool('greeted') ?? false;
-  currentAppTheme = prefs.getString('theme') ?? 'Dark Theme';
+  currentThemeName = prefs.getString('theme') ?? 'Dark Theme';
+
+  switch (currentThemeName) {
+    case 'Light Theme':
+      currentThemeMode = ThemeMode.light;
+      break;
+    case 'Dark Theme':
+      currentThemeMode = ThemeMode.dark;
+      break;
+    case 'System Default':
+    default:
+      currentThemeMode = ThemeMode.system;
+      break;
+  }
+
   runApp(MyApp(greeted: greeted));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final bool greeted;
   const MyApp({super.key, required this.greeted});
 
-  ThemeData _getTheme() {
-    switch (currentAppTheme) {
-      case 'Light Theme':
-        return ThemeData(
-          brightness: Brightness.light,
-          primaryColor: Colors.blue,
-          scaffoldBackgroundColor: Colors.white,
-          fontFamily: 'Barlow',
-          textTheme: const TextTheme(
-            bodyLarge: TextStyle(color: Colors.black),
-            bodyMedium: TextStyle(color: Colors.black),
-          ),
-          cupertinoOverrideTheme: const CupertinoThemeData(
-            brightness: Brightness.light,
-            primaryColor: CupertinoColors.activeBlue,
-            scaffoldBackgroundColor: CupertinoColors.white,
-            textTheme: CupertinoTextThemeData(
-              textStyle: TextStyle(
-                color: CupertinoColors.black,
-                fontSize: 17,
-                fontFamily: 'Barlow',
-              ),
-            ),
-          ),
-        );
-      case 'Dark Theme':
-      default:
-        return ThemeData(
-          brightness: Brightness.dark,
-          primaryColor: Colors.blue,
-          scaffoldBackgroundColor: Colors.black,
-          fontFamily: 'Barlow',
-          textTheme: const TextTheme(
-            bodyLarge: TextStyle(color: Colors.white),
-            bodyMedium: TextStyle(color: Colors.white),
-          ),
-          cupertinoOverrideTheme: const CupertinoThemeData(
-            brightness: Brightness.dark,
-            primaryColor: CupertinoColors.activeBlue,
-            scaffoldBackgroundColor: CupertinoColors.black,
-            textTheme: CupertinoTextThemeData(
-              textStyle: TextStyle(
-                color: CupertinoColors.white,
-                fontSize: 17,
-                fontFamily: 'Barlow',
-              ),
-            ),
-          ),
-        );
-    }
+  @override
+  State<MyApp> createState() => _MyAppState();
+
+  static _MyAppState? of(BuildContext context) =>
+      context.findAncestorStateOfType<_MyAppState>();
+}
+
+class _MyAppState extends State<MyApp> {
+  ThemeMode _themeMode = currentThemeMode;
+
+  void changeTheme(ThemeMode themeMode, String themeName) async {
+    setState(() {
+      _themeMode = themeMode;
+    });
+    currentThemeMode = themeMode;
+    currentThemeName = themeName;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme', themeName);
   }
+
+  final _lightTheme = ThemeData(
+    brightness: Brightness.light,
+    primaryColor: Colors.blue,
+    scaffoldBackgroundColor: Colors.white,
+    fontFamily: 'Barlow',
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Colors.black),
+      bodyMedium: TextStyle(color: Colors.black),
+    ),
+    cupertinoOverrideTheme: const CupertinoThemeData(
+      brightness: Brightness.light,
+      primaryColor: CupertinoColors.activeBlue,
+      scaffoldBackgroundColor: CupertinoColors.white,
+      textTheme: CupertinoTextThemeData(
+        textStyle: TextStyle(
+          color: CupertinoColors.black,
+          fontSize: 17,
+          fontFamily: 'Barlow',
+        ),
+      ),
+    ),
+  );
+
+  final _darkTheme = ThemeData(
+    brightness: Brightness.dark,
+    primaryColor: Colors.blue,
+    scaffoldBackgroundColor: Colors.black,
+    fontFamily: 'Barlow',
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: Colors.white),
+      bodyMedium: TextStyle(color: Colors.white),
+    ),
+    cupertinoOverrideTheme: const CupertinoThemeData(
+      brightness: Brightness.dark,
+      primaryColor: CupertinoColors.activeBlue,
+      scaffoldBackgroundColor: CupertinoColors.black,
+      textTheme: CupertinoTextThemeData(
+        textStyle: TextStyle(
+          color: CupertinoColors.white,
+          fontSize: 17,
+          fontFamily: 'Barlow',
+        ),
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'ZYNC',
-      theme: _getTheme(),
-      home: greeted ? const DashboardScreen() : const SplashScreen(),
+      theme: _lightTheme,
+      darkTheme: _darkTheme,
+      themeMode: _themeMode,
+      home: widget.greeted ? const DashboardScreen() : const SplashScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -647,64 +678,37 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  String _currentTheme = 'Dark Theme'; // Default theme
-
   void _showThemeDialog() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text(
-          'Select Theme',
-          style: TextStyle(color: Colors.white),
-        ),
+        title: const Text('Select Theme'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const SizedBox(height: 16),
             ListTile(
-              leading: const Icon(Icons.light_mode, color: Colors.white),
-              title: const Text(
-                'Light Theme',
-                style: TextStyle(color: Colors.white),
-              ),
+              leading: const Icon(Icons.light_mode),
+              title: const Text('Light Theme'),
               onTap: () {
-                setState(() {
-                  _currentTheme = 'Light Theme';
-                });
                 Navigator.of(context).pop();
-                _applyTheme('Light Theme');
+                _applyTheme(ThemeMode.light, 'Light Theme');
               },
             ),
             ListTile(
-              leading: const Icon(Icons.dark_mode, color: Colors.white),
-              title: const Text(
-                'Dark Theme',
-                style: TextStyle(color: Colors.white),
-              ),
+              leading: const Icon(Icons.dark_mode),
+              title: const Text('Dark Theme'),
               onTap: () {
-                setState(() {
-                  _currentTheme = 'Dark Theme';
-                });
                 Navigator.of(context).pop();
-                _applyTheme('Dark Theme');
+                _applyTheme(ThemeMode.dark, 'Dark Theme');
               },
             ),
             ListTile(
-              leading: const Icon(
-                Icons.settings_system_daydream,
-                color: Colors.white,
-              ),
-              title: const Text(
-                'System Default',
-                style: TextStyle(color: Colors.white),
-              ),
+              leading: const Icon(Icons.settings_system_daydream),
+              title: const Text('System Default'),
               onTap: () {
-                setState(() {
-                  _currentTheme = 'System Default';
-                });
                 Navigator.of(context).pop();
-                _applyTheme('System Default');
+                _applyTheme(ThemeMode.system, 'System Default');
               },
             ),
           ],
@@ -712,57 +716,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel', style: TextStyle(color: Colors.blue)),
+            child: const Text('Cancel'),
           ),
         ],
       ),
     );
   }
 
-  void _applyTheme(String theme) async {
-    // Update global theme state
-    currentAppTheme = theme;
-
-    // Save theme preference
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('theme', theme);
-
-    // Force app rebuild with new theme
-    // In a real app, you'd use a state management solution
-    // For now, we'll show a message that the theme has changed
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Theme changed to $theme. Restart the app to see changes.',
-        ),
-        backgroundColor: Colors.blue,
-        duration: const Duration(seconds: 3),
-      ),
-    );
+  void _applyTheme(ThemeMode themeMode, String themeName) {
+    MyApp.of(context)?.changeTheme(themeMode, themeName);
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
     return Material(
       child: Scaffold(
-        backgroundColor: CupertinoColors.black,
+        backgroundColor: theme.scaffoldBackgroundColor,
         appBar: CupertinoNavigationBar(
-          backgroundColor: CupertinoColors.black,
+          backgroundColor: theme.scaffoldBackgroundColor,
           border: null,
           leading: Builder(
             builder: (context) => CupertinoButton(
               padding: EdgeInsets.zero,
               onPressed: () => Scaffold.of(context).openDrawer(),
-              child: const Icon(
-                CupertinoIcons.bars,
-                color: CupertinoColors.white,
-              ),
+              child: Icon(CupertinoIcons.bars, color: textColor),
             ),
           ),
-          middle: const Text(
+          middle: Text(
             'ZYNC',
             style: TextStyle(
-              color: CupertinoColors.white,
+              color: textColor,
               fontSize: 24,
               fontWeight: FontWeight.bold,
               letterSpacing: 8,
@@ -772,102 +760,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         drawer: Drawer(
           child: Container(
-            color: CupertinoColors.darkBackgroundGray,
+            color: theme.canvasColor,
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                const DrawerHeader(
-                  decoration: BoxDecoration(color: CupertinoColors.black),
+                DrawerHeader(
+                  decoration: BoxDecoration(
+                    color: theme.scaffoldBackgroundColor,
+                  ),
                   child: Text(
-                    'Menu',
+                    'ZYNC',
                     style: TextStyle(
-                      color: CupertinoColors.white,
+                      color: textColor,
                       fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 8,
                       fontFamily: 'Barlow',
                     ),
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.home,
-                    color: CupertinoColors.white,
-                  ),
-                  title: const Text(
+                  leading: Icon(CupertinoIcons.home, color: textColor),
+                  title: Text(
                     'Home',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontFamily: 'Barlow',
-                    ),
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
                   onTap: () => Navigator.of(context).pop(),
                 ),
                 ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.add,
-                    color: CupertinoColors.white,
-                  ),
-                  title: const Text(
+                  leading: Icon(CupertinoIcons.add, color: textColor),
+                  title: Text(
                     'Add a device',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontFamily: 'Barlow',
-                    ),
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
                   onTap: () => Navigator.of(context).pop(),
                 ),
                 ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.wifi,
-                    color: CupertinoColors.white,
-                  ),
-                  title: const Text(
+                  leading: Icon(CupertinoIcons.wifi, color: textColor),
+                  title: Text(
                     'Live Scan',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontFamily: 'Barlow',
-                    ),
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
                   onTap: () => Navigator.of(context).pop(),
                 ),
                 ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.doc_text,
-                    color: CupertinoColors.white,
-                  ),
-                  title: const Text(
+                  leading: Icon(CupertinoIcons.doc_text, color: textColor),
+                  title: Text(
                     'Scan Logs',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontFamily: 'Barlow',
-                    ),
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
                   onTap: () => Navigator.of(context).pop(),
                 ),
                 ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.device_laptop,
-                    color: CupertinoColors.white,
-                  ),
-                  title: const Text(
+                  leading: Icon(CupertinoIcons.device_laptop, color: textColor),
+                  title: Text(
                     'Theme',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontFamily: 'Barlow',
-                    ),
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
                   onTap: () => _showThemeDialog(),
                 ),
                 ListTile(
-                  leading: const Icon(
-                    CupertinoIcons.settings,
-                    color: CupertinoColors.white,
-                  ),
-                  title: const Text(
+                  leading: Icon(CupertinoIcons.settings, color: textColor),
+                  title: Text(
                     'Settings',
-                    style: TextStyle(
-                      color: CupertinoColors.white,
-                      fontFamily: 'Barlow',
-                    ),
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
                   onTap: () => Navigator.of(context).pop(),
                 ),
@@ -888,36 +844,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          backgroundColor: Colors.grey[900],
-                          title: const Text(
-                            'Add Device',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                          title: const Text('Add Device'),
                           content: const Text(
                             'Add Device functionality will be implemented here.',
-                            style: TextStyle(color: Colors.white70),
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
-                              child: const Text(
-                                'OK',
-                                style: TextStyle(color: Colors.blue),
-                              ),
+                              child: const Text('OK'),
                             ),
                           ],
                         ),
                       );
                     },
-                    child: const Row(
+                    child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(CupertinoIcons.add, color: CupertinoColors.white),
-                        SizedBox(width: 12),
+                        Icon(CupertinoIcons.add, color: textColor),
+                        const SizedBox(width: 12),
                         Text(
                           'Add Device',
                           style: TextStyle(
-                            color: CupertinoColors.white,
+                            color: textColor,
                             fontSize: 20,
                             fontFamily: 'Barlow',
                           ),
@@ -935,47 +883,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          backgroundColor: Colors.grey[900],
-                          title: const Text(
-                            'Live Scan',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                          title: const Text('Live Scan'),
                           content: const Text(
                             'Live Scan functionality will be implemented here.',
-                            style: TextStyle(color: Colors.white70),
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
-                              child: const Text(
-                                'OK',
-                                style: TextStyle(color: Colors.blue),
-                              ),
+                              child: const Text('OK'),
                             ),
                           ],
                         ),
                       );
                     },
-                    child: const Column(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           'Live Scan',
                           style: TextStyle(
-                            color: CupertinoColors.white,
+                            color: textColor,
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             fontFamily: 'Barlow',
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           child: Text(
                             'Initiates a Bluetooth command to ESP32 to begin scanning nearby networks',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: CupertinoColors.systemGrey,
+                              color: theme.textTheme.bodySmall?.color,
                               fontSize: 14,
                               fontFamily: 'Barlow',
                             ),
@@ -994,47 +934,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          backgroundColor: Colors.grey[900],
-                          title: const Text(
-                            'Scan Logs',
-                            style: TextStyle(color: Colors.white),
-                          ),
+                          title: const Text('Scan Logs'),
                           content: const Text(
                             'Scan Logs functionality will be implemented here.',
-                            style: TextStyle(color: Colors.white70),
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
-                              child: const Text(
-                                'OK',
-                                style: TextStyle(color: Colors.blue),
-                              ),
+                              child: const Text('OK'),
                             ),
                           ],
                         ),
                       );
                     },
-                    child: const Column(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           'Scan Logs',
                           style: TextStyle(
-                            color: CupertinoColors.white,
+                            color: textColor,
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             fontFamily: 'Barlow',
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8.0),
+                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
                           child: Text(
                             'View Scan Logs From The Device',
                             textAlign: TextAlign.center,
                             style: TextStyle(
-                              color: CupertinoColors.systemGrey,
+                              color: theme.textTheme.bodySmall?.color,
                               fontSize: 14,
                               fontFamily: 'Barlow',
                             ),
@@ -1057,15 +989,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required VoidCallback onTap,
     required Widget child,
   }) {
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24.0),
         decoration: BoxDecoration(
-          color: CupertinoColors.black,
+          color: theme.scaffoldBackgroundColor,
           borderRadius: BorderRadius.circular(16.0),
-          border: Border.all(color: CupertinoColors.systemGrey, width: 1),
+          border: Border.all(color: theme.dividerColor, width: 1),
         ),
         child: child,
       ),
