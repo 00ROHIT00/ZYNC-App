@@ -13,6 +13,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final greeted = prefs.getBool('greeted') ?? false;
+  final permissionsGranted = prefs.getBool('permissionsGranted') ?? false;
+  final username = prefs.getString('username') ?? '';
   currentThemeName = prefs.getString('theme') ?? 'Dark Theme';
 
   switch (currentThemeName) {
@@ -28,12 +30,26 @@ void main() async {
       break;
   }
 
-  runApp(MyApp(greeted: greeted));
+  runApp(
+    MyApp(
+      greeted: greeted,
+      permissionsGranted: permissionsGranted,
+      username: username,
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
   final bool greeted;
-  const MyApp({super.key, required this.greeted});
+  final bool permissionsGranted;
+  final String username;
+
+  const MyApp({
+    super.key,
+    required this.greeted,
+    required this.permissionsGranted,
+    required this.username,
+  });
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -101,6 +117,16 @@ class _MyAppState extends State<MyApp> {
     ),
   );
 
+  Widget _getHome() {
+    if (!widget.greeted) {
+      return const SplashScreen();
+    }
+    if (!widget.permissionsGranted) {
+      return PermissionsScreen(name: widget.username);
+    }
+    return const DashboardScreen();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -108,7 +134,7 @@ class _MyAppState extends State<MyApp> {
       theme: _lightTheme,
       darkTheme: _darkTheme,
       themeMode: _themeMode,
-      home: widget.greeted ? const DashboardScreen() : const SplashScreen(),
+      home: _getHome(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -224,7 +250,68 @@ class _GreetingScreenState extends State<GreetingScreen> {
       context: context,
       builder: (context) => CupertinoAlertDialog(
         title: const Text('Terms and Conditions'),
-        content: const Text('Here are the terms and conditions...'),
+        content: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              '''Last updated: June 2025
+
+Welcome to ZYNC — your personal portable WiFi security scanner.
+
+By using the ZYNC mobile application and hardware device (collectively referred to as the "Service"), you agree to the following Terms and Conditions. Please read them carefully.
+
+1. Acceptance of Terms
+By accessing or using ZYNC, you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, do not use the app or device.
+
+2. Description of Service
+ZYNC allows users to:
+\u2022 Scan nearby WiFi networks using a portable device.
+\u2022 Display details such as SSID, encryption type, and potential risks.
+\u2022 Connect the device to the mobile app via Bluetooth to view live scan data.
+\u2022 Store and view scan logs through the mobile app.
+
+The app and device are intended to inform and assist users in identifying potentially insecure WiFi connections. It does not interfere, tamper with, or access any network content.
+
+3. User Responsibility
+You agree to use ZYNC only for lawful purposes. You shall not:
+\u2022 Attempt unauthorized access to networks.
+\u2022 Use the device/app for hacking, eavesdropping, or packet sniffing.
+\u2022 Share inaccurate or misleading scan data.
+
+ZYNC is a passive scanner — it does not connect to any network without user consent.
+
+4. Data Collection and Privacy
+ZYNC may collect:
+\u2022 Scan metadata (SSID, signal strength, encryption type).
+\u2022 Device information (non-personally identifiable).
+\u2022 App usage statistics (for performance improvements).
+
+All data remains local to the user's device unless manually exported. ZYNC does not share your data with third parties.
+
+5. No Warranty
+ZYNC is provided on an "as-is" basis. We do not guarantee:
+\u2022 The accuracy or completeness of scan results.
+\u2022 That all security threats will be detected.
+\u2022 Uninterrupted or error-free operation.
+
+You are solely responsible for how you act based on scan data.
+
+6. Limitation of Liability
+In no event shall ZYNC, its developers, or affiliates be liable for:
+\u2022 Any damage caused by reliance on scan results.
+\u2022 Loss of data, network issues, or unauthorized access.
+\u2022 Any indirect or consequential losses.
+
+7. Modifications to Terms
+We reserve the right to update these Terms at any time. Continued use of the app or device after changes means you accept the updated terms.''',
+              textAlign: TextAlign.left,
+              style: TextStyle(
+                color: CupertinoTheme.of(context).textTheme.textStyle.color,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
         actions: [
           CupertinoDialogAction(
             child: const Text('Close'),
@@ -596,7 +683,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   width: double.infinity,
                   child: CupertinoButton.filled(
                     onPressed: allEnabled
-                        ? () {
+                        ? () async {
+                            final prefs = await SharedPreferences.getInstance();
+                            await prefs.setBool('permissionsGranted', true);
                             Navigator.of(context).pushReplacement(
                               CupertinoPageRoute(
                                 builder: (_) => const DashboardScreen(),
@@ -723,6 +812,84 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  void _openTerms() {
+    // Show a Cupertino dialog or push a new page with terms
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Terms and Conditions'),
+        content: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              '''Last updated: June 2025
+
+Welcome to ZYNC — your personal portable WiFi security scanner.
+
+By using the ZYNC mobile application and hardware device (collectively referred to as the "Service"), you agree to the following Terms and Conditions. Please read them carefully.
+
+1. Acceptance of Terms
+By accessing or using ZYNC, you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, do not use the app or device.
+
+2. Description of Service
+ZYNC allows users to:
+\u2022 Scan nearby WiFi networks using a portable device.
+\u2022 Display details such as SSID, encryption type, and potential risks.
+\u2022 Connect the device to the mobile app via Bluetooth to view live scan data.
+\u2022 Store and view scan logs through the mobile app.
+
+The app and device are intended to inform and assist users in identifying potentially insecure WiFi connections. It does not interfere, tamper with, or access any network content.
+
+3. User Responsibility
+You agree to use ZYNC only for lawful purposes. You shall not:
+\u2022 Attempt unauthorized access to networks.
+\u2022 Use the device/app for hacking, eavesdropping, or packet sniffing.
+\u2022 Share inaccurate or misleading scan data.
+
+ZYNC is a passive scanner — it does not connect to any network without user consent.
+
+4. Data Collection and Privacy
+ZYNC may collect:
+\u2022 Scan metadata (SSID, signal strength, encryption type).
+\u2022 Device information (non-personally identifiable).
+\u2022 App usage statistics (for performance improvements).
+
+All data remains local to the user's device unless manually exported. ZYNC does not share your data with third parties.
+
+5. No Warranty
+ZYNC is provided on an "as-is" basis. We do not guarantee:
+\u2022 The accuracy or completeness of scan results.
+\u2022 That all security threats will be detected.
+\u2022 Uninterrupted or error-free operation.
+
+You are solely responsible for how you act based on scan data.
+
+6. Limitation of Liability
+In no event shall ZYNC, its developers, or affiliates be liable for:
+\u2022 Any damage caused by reliance on scan results.
+\u2022 Loss of data, network issues, or unauthorized access.
+\u2022 Any indirect or consequential losses.
+
+7. Modifications to Terms
+We reserve the right to update these Terms at any time. Continued use of the app or device after changes means you accept the updated terms.''',
+              textAlign: TextAlign.left,
+              style: TextStyle(
+                color: CupertinoTheme.of(context).textTheme.textStyle.color,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Close'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _applyTheme(ThemeMode themeMode, String themeName) {
     MyApp.of(context)?.changeTheme(themeMode, themeName);
   }
@@ -818,6 +985,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
                   onTap: () => _showThemeDialog(),
+                ),
+                ListTile(
+                  leading: Icon(CupertinoIcons.doc_text_fill, color: textColor),
+                  title: Text(
+                    'Terms & Conditions',
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                  ),
+                  onTap: _openTerms,
                 ),
                 ListTile(
                   leading: Icon(CupertinoIcons.settings, color: textColor),
