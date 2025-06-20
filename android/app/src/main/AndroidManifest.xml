@@ -11,7 +11,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- INTERNET is already included in debug/profile manifests -->
     <application
-        android:label="zync"
+        android:label="ZYNC"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

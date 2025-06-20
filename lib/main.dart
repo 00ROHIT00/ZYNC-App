@@ -1,13 +1,18 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 
+// Global theme state
+String currentAppTheme = 'Dark Theme';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final greeted = prefs.getBool('greeted') ?? false;
+  currentAppTheme = prefs.getString('theme') ?? 'Dark Theme';
   runApp(MyApp(greeted: greeted));
 }
 
@@ -15,23 +20,64 @@ class MyApp extends StatelessWidget {
   final bool greeted;
   const MyApp({super.key, required this.greeted});
 
+  ThemeData _getTheme() {
+    switch (currentAppTheme) {
+      case 'Light Theme':
+        return ThemeData(
+          brightness: Brightness.light,
+          primaryColor: Colors.blue,
+          scaffoldBackgroundColor: Colors.white,
+          fontFamily: 'Barlow',
+          textTheme: const TextTheme(
+            bodyLarge: TextStyle(color: Colors.black),
+            bodyMedium: TextStyle(color: Colors.black),
+          ),
+          cupertinoOverrideTheme: const CupertinoThemeData(
+            brightness: Brightness.light,
+            primaryColor: CupertinoColors.activeBlue,
+            scaffoldBackgroundColor: CupertinoColors.white,
+            textTheme: CupertinoTextThemeData(
+              textStyle: TextStyle(
+                color: CupertinoColors.black,
+                fontSize: 17,
+                fontFamily: 'Barlow',
+              ),
+            ),
+          ),
+        );
+      case 'Dark Theme':
+      default:
+        return ThemeData(
+          brightness: Brightness.dark,
+          primaryColor: Colors.blue,
+          scaffoldBackgroundColor: Colors.black,
+          fontFamily: 'Barlow',
+          textTheme: const TextTheme(
+            bodyLarge: TextStyle(color: Colors.white),
+            bodyMedium: TextStyle(color: Colors.white),
+          ),
+          cupertinoOverrideTheme: const CupertinoThemeData(
+            brightness: Brightness.dark,
+            primaryColor: CupertinoColors.activeBlue,
+            scaffoldBackgroundColor: CupertinoColors.black,
+            textTheme: CupertinoTextThemeData(
+              textStyle: TextStyle(
+                color: CupertinoColors.white,
+                fontSize: 17,
+                fontFamily: 'Barlow',
+              ),
+            ),
+          ),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return CupertinoApp(
+    return MaterialApp(
       title: 'ZYNC',
-      theme: const CupertinoThemeData(
-        brightness: Brightness.dark,
-        primaryColor: CupertinoColors.activeBlue,
-        scaffoldBackgroundColor: CupertinoColors.black,
-        textTheme: CupertinoTextThemeData(
-          textStyle: TextStyle(
-            color: CupertinoColors.white,
-            fontSize: 17,
-            fontFamily: 'Barlow',
-          ),
-        ),
-      ),
-      home: greeted ? const HomeScreen() : const SplashScreen(),
+      theme: _getTheme(),
+      home: greeted ? const DashboardScreen() : const SplashScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
@@ -53,7 +99,7 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
     _animation = Tween<double>(
@@ -63,7 +109,7 @@ class _SplashScreenState extends State<SplashScreen>
     _controller.forward();
     _controller.addStatusListener((status) {
       if (status == AnimationStatus.completed) {
-        Future.delayed(const Duration(seconds: 1), () {
+        Future.delayed(const Duration(milliseconds: 500), () {
           _controller.reverse();
         });
       } else if (status == AnimationStatus.dismissed) {
@@ -84,17 +130,20 @@ class _SplashScreenState extends State<SplashScreen>
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.black,
-      child: Center(
-        child: FadeTransition(
-          opacity: _animation,
-          child: const Text(
-            'ZYNC',
-            style: TextStyle(
-              color: CupertinoColors.white,
-              fontSize: 48,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 8,
-              fontFamily: 'Barlow',
+      child: Material(
+        type: MaterialType.transparency,
+        child: Center(
+          child: FadeTransition(
+            opacity: _animation,
+            child: const Text(
+              'ZYNC',
+              style: TextStyle(
+                color: CupertinoColors.white,
+                fontSize: 48,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 8,
+                fontFamily: 'Barlow',
+              ),
             ),
           ),
         ),
@@ -159,143 +208,144 @@ class _GreetingScreenState extends State<GreetingScreen> {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.black,
-      child: SafeArea(
-        child: Stack(
-          children: [
-            // ZYNC at the top
-            Positioned(
-              top: 32,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Text(
-                  'ZYNC',
-                  style: const TextStyle(
-                    color: CupertinoColors.white,
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 8,
-                    fontFamily: 'Barlow',
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              // ZYNC at the top
+              const Positioned(
+                top: 32,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Text(
+                    'ZYNC',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontSize: 48,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 8,
+                      fontFamily: 'Barlow',
+                    ),
                   ),
                 ),
               ),
-            ),
-            // Main content
-            Center(
-              child: _greetedName == null
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 80),
-                        const Text(
-                          'What should we call you?',
-                          style: TextStyle(
-                            color: CupertinoColors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.w500,
-                            fontFamily: 'Barlow',
+              // Main content
+              Center(
+                child: _greetedName == null
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: 80),
+                          const Text(
+                            'What should we call you?',
+                            style: TextStyle(
+                              color: CupertinoColors.white,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w500,
+                              fontFamily: 'Barlow',
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 24),
-                        SizedBox(
-                          width: 250,
-                          child: CupertinoTextField(
-                            controller: _controller,
-                            placeholder: 'Enter your name',
+                          const SizedBox(height: 24),
+                          SizedBox(
+                            width: 250,
+                            child: CupertinoTextField(
+                              controller: _controller,
+                              placeholder: 'Enter your name',
+                              style: const TextStyle(
+                                color: CupertinoColors.white,
+                                fontFamily: 'Barlow',
+                              ),
+                              placeholderStyle: const TextStyle(
+                                color: CupertinoColors.systemGrey,
+                                fontFamily: 'Barlow',
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 16,
+                              ),
+                              decoration: BoxDecoration(
+                                color: CupertinoColors.darkBackgroundGray,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              onChanged: (_) => setState(() {}),
+                              onSubmitted: (_) => _submit(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          CupertinoButton.filled(
+                            onPressed: _canContinue ? _submit : null,
+                            child: _loading
+                                ? const CupertinoActivityIndicator()
+                                : const Text(
+                                    'Continue',
+                                    style: TextStyle(fontFamily: 'Barlow'),
+                                  ),
+                          ),
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(height: 80),
+                          Text(
+                            'Hello, $_greetedName!',
                             style: const TextStyle(
                               color: CupertinoColors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
                               fontFamily: 'Barlow',
                             ),
-                            placeholderStyle: const TextStyle(
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Welcome to ZYNC.',
+                            style: TextStyle(
                               color: CupertinoColors.systemGrey,
+                              fontSize: 18,
                               fontFamily: 'Barlow',
                             ),
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 12,
-                              horizontal: 16,
+                          ),
+                        ],
+                      ),
+              ),
+              // Accept Terms and Conditions at the bottom
+              if (_greetedName == null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 32,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CupertinoSwitch(
+                        value: _acceptedTerms,
+                        onChanged: (val) {
+                          setState(() {
+                            _acceptedTerms = val;
+                          });
+                        },
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: GestureDetector(
+                          onTap: _openTerms,
+                          child: const Text(
+                            'Accept Terms and Conditions',
+                            style: TextStyle(
+                              color: CupertinoColors.activeBlue,
+                              fontSize: 16,
+                              fontFamily: 'Barlow',
                             ),
-                            decoration: BoxDecoration(
-                              color: CupertinoColors.darkBackgroundGray,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            onChanged: (_) => setState(() {}),
-                            onSubmitted: (_) => _submit(),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        CupertinoButton.filled(
-                          onPressed: _canContinue ? _submit : null,
-                          child: _loading
-                              ? const CupertinoActivityIndicator()
-                              : const Text(
-                                  'Continue',
-                                  style: TextStyle(fontFamily: 'Barlow'),
-                                ),
-                        ),
-                      ],
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 80),
-                        Text(
-                          'Hello, $_greetedName!',
-                          style: const TextStyle(
-                            color: CupertinoColors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Welcome to ZYNC.',
-                          style: TextStyle(
-                            color: CupertinoColors.systemGrey,
-                            fontSize: 18,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                      ],
-                    ),
-            ),
-            // Accept Terms and Conditions at the bottom
-            if (_greetedName == null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 32,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CupertinoSwitch(
-                      value: _acceptedTerms,
-                      onChanged: (val) {
-                        setState(() {
-                          _acceptedTerms = val;
-                        });
-                      },
-                    ),
-                    const SizedBox(width: 12),
-                    Flexible(
-                      child: GestureDetector(
-                        onTap: _openTerms,
-                        child: const Text(
-                          'Accept Terms and Conditions',
-                          style: TextStyle(
-                            color: CupertinoColors.activeBlue,
-                            fontSize: 16,
-                            fontFamily: 'Barlow',
-                            decoration: TextDecoration.underline,
-                          ),
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -307,16 +357,19 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
+    return const CupertinoPageScaffold(
       backgroundColor: CupertinoColors.black,
-      child: Center(
-        child: Text(
-          'Welcome to ZYNC!',
-          style: const TextStyle(
-            color: CupertinoColors.white,
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Barlow',
+      child: Material(
+        type: MaterialType.transparency,
+        child: Center(
+          child: Text(
+            'Welcome to ZYNC!',
+            style: TextStyle(
+              color: CupertinoColors.white,
+              fontSize: 28,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Barlow',
+            ),
           ),
         ),
       ),
@@ -349,16 +402,34 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.black,
-      child: Center(
-        child: Text(
-          'Hello ${widget.name}, welcome to ZYNC',
-          style: const TextStyle(
-            color: CupertinoColors.white,
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'Barlow',
+      child: Material(
+        type: MaterialType.transparency,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'Hello ${widget.name}',
+                style: const TextStyle(
+                  color: CupertinoColors.white,
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Barlow',
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Welcome to ZYNC.',
+                style: TextStyle(
+                  color: CupertinoColors.systemGrey,
+                  fontSize: 18,
+                  fontFamily: 'Barlow',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ),
-          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -439,70 +510,77 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         _bluetooth && _location && _storage && _internet && _notifications;
     return CupertinoPageScaffold(
       backgroundColor: CupertinoColors.black,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Permissions Required',
-                style: TextStyle(
-                  color: CupertinoColors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Barlow',
-                ),
-              ),
-              const SizedBox(height: 24),
-              PermissionCheckboxTile(
-                title: 'Bluetooth',
-                explanation:
-                    'Required for communicating with the WiFi scanner.',
-                value: _bluetooth,
-                onChanged: _onBluetoothChanged,
-              ),
-              PermissionCheckboxTile(
-                title: 'Location',
-                explanation:
-                    'On older Android versions, Bluetooth scans require location access.',
-                value: _location,
-                onChanged: _onLocationChanged,
-              ),
-              PermissionCheckboxTile(
-                title: 'Storage',
-                explanation: 'For saving logs onto your phone.',
-                value: _storage,
-                onChanged: _onStorageChanged,
-              ),
-              PermissionCheckboxTile(
-                title: 'Internet',
-                explanation: 'For getting AI results.',
-                value: _internet,
-                onChanged: (val) => setState(() => _internet = val ?? false),
-              ),
-              PermissionCheckboxTile(
-                title: 'Notifications',
-                explanation: 'To send important alerts to you.',
-                value: _notifications,
-                onChanged: _onNotificationChanged,
-              ),
-              const Spacer(),
-              SizedBox(
-                width: double.infinity,
-                child: CupertinoButton.filled(
-                  onPressed: allEnabled
-                      ? () {
-                          // TODO: Navigate to the next screen
-                        }
-                      : null,
-                  child: const Text(
-                    'Continue',
-                    style: TextStyle(fontFamily: 'Barlow'),
+      child: Material(
+        type: MaterialType.transparency,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Permissions Required',
+                  style: TextStyle(
+                    color: CupertinoColors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Barlow',
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                PermissionCheckboxTile(
+                  title: 'Bluetooth',
+                  explanation:
+                      'Required for communicating with the WiFi scanner.',
+                  value: _bluetooth,
+                  onChanged: _onBluetoothChanged,
+                ),
+                PermissionCheckboxTile(
+                  title: 'Location',
+                  explanation:
+                      'On older Android versions, Bluetooth scans require location access.',
+                  value: _location,
+                  onChanged: _onLocationChanged,
+                ),
+                PermissionCheckboxTile(
+                  title: 'Storage',
+                  explanation: 'For saving logs onto your phone.',
+                  value: _storage,
+                  onChanged: _onStorageChanged,
+                ),
+                PermissionCheckboxTile(
+                  title: 'Internet',
+                  explanation: 'For getting AI results.',
+                  value: _internet,
+                  onChanged: (val) => setState(() => _internet = val ?? false),
+                ),
+                PermissionCheckboxTile(
+                  title: 'Notifications',
+                  explanation: 'To send important alerts to you.',
+                  value: _notifications,
+                  onChanged: _onNotificationChanged,
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: double.infinity,
+                  child: CupertinoButton.filled(
+                    onPressed: allEnabled
+                        ? () {
+                            Navigator.of(context).pushReplacement(
+                              CupertinoPageRoute(
+                                builder: (_) => const DashboardScreen(),
+                              ),
+                            );
+                          }
+                        : null,
+                    child: const Text(
+                      'Continue',
+                      style: TextStyle(fontFamily: 'Barlow'),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -556,6 +634,440 @@ class PermissionCheckboxTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  String _currentTheme = 'Dark Theme'; // Default theme
+
+  void _showThemeDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text(
+          'Select Theme',
+          style: TextStyle(color: Colors.white),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.light_mode, color: Colors.white),
+              title: const Text(
+                'Light Theme',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                setState(() {
+                  _currentTheme = 'Light Theme';
+                });
+                Navigator.of(context).pop();
+                _applyTheme('Light Theme');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dark_mode, color: Colors.white),
+              title: const Text(
+                'Dark Theme',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                setState(() {
+                  _currentTheme = 'Dark Theme';
+                });
+                Navigator.of(context).pop();
+                _applyTheme('Dark Theme');
+              },
+            ),
+            ListTile(
+              leading: const Icon(
+                Icons.settings_system_daydream,
+                color: Colors.white,
+              ),
+              title: const Text(
+                'System Default',
+                style: TextStyle(color: Colors.white),
+              ),
+              onTap: () {
+                setState(() {
+                  _currentTheme = 'System Default';
+                });
+                Navigator.of(context).pop();
+                _applyTheme('System Default');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel', style: TextStyle(color: Colors.blue)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyTheme(String theme) async {
+    // Update global theme state
+    currentAppTheme = theme;
+
+    // Save theme preference
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('theme', theme);
+
+    // Force app rebuild with new theme
+    // In a real app, you'd use a state management solution
+    // For now, we'll show a message that the theme has changed
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Theme changed to $theme. Restart the app to see changes.',
+        ),
+        backgroundColor: Colors.blue,
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      child: Scaffold(
+        backgroundColor: CupertinoColors.black,
+        appBar: CupertinoNavigationBar(
+          backgroundColor: CupertinoColors.black,
+          border: null,
+          leading: Builder(
+            builder: (context) => CupertinoButton(
+              padding: EdgeInsets.zero,
+              onPressed: () => Scaffold.of(context).openDrawer(),
+              child: const Icon(
+                CupertinoIcons.bars,
+                color: CupertinoColors.white,
+              ),
+            ),
+          ),
+          middle: const Text(
+            'ZYNC',
+            style: TextStyle(
+              color: CupertinoColors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 8,
+              fontFamily: 'Barlow',
+            ),
+          ),
+        ),
+        drawer: Drawer(
+          child: Container(
+            color: CupertinoColors.darkBackgroundGray,
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                const DrawerHeader(
+                  decoration: BoxDecoration(color: CupertinoColors.black),
+                  child: Text(
+                    'Menu',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontSize: 24,
+                      fontFamily: 'Barlow',
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    CupertinoIcons.home,
+                    color: CupertinoColors.white,
+                  ),
+                  title: const Text(
+                    'Home',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontFamily: 'Barlow',
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    CupertinoIcons.add,
+                    color: CupertinoColors.white,
+                  ),
+                  title: const Text(
+                    'Add a device',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontFamily: 'Barlow',
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    CupertinoIcons.wifi,
+                    color: CupertinoColors.white,
+                  ),
+                  title: const Text(
+                    'Live Scan',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontFamily: 'Barlow',
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    CupertinoIcons.doc_text,
+                    color: CupertinoColors.white,
+                  ),
+                  title: const Text(
+                    'Scan Logs',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontFamily: 'Barlow',
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    CupertinoIcons.device_laptop,
+                    color: CupertinoColors.white,
+                  ),
+                  title: const Text(
+                    'Theme',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontFamily: 'Barlow',
+                    ),
+                  ),
+                  onTap: () => _showThemeDialog(),
+                ),
+                ListTile(
+                  leading: const Icon(
+                    CupertinoIcons.settings,
+                    color: CupertinoColors.white,
+                  ),
+                  title: const Text(
+                    'Settings',
+                    style: TextStyle(
+                      color: CupertinoColors.white,
+                      fontFamily: 'Barlow',
+                    ),
+                  ),
+                  onTap: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              children: [
+                Expanded(
+                  child: _buildDashboardButton(
+                    context,
+                    onTap: () {
+                      // TODO: Navigate to Add Device screen
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: Colors.grey[900],
+                          title: const Text(
+                            'Add Device',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          content: const Text(
+                            'Add Device functionality will be implemented here.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text(
+                                'OK',
+                                style: TextStyle(color: Colors.blue),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(CupertinoIcons.add, color: CupertinoColors.white),
+                        SizedBox(width: 12),
+                        Text(
+                          'Add Device',
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 20,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: _buildDashboardButton(
+                    context,
+                    onTap: () {
+                      // TODO: Navigate to Live Scan screen
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: Colors.grey[900],
+                          title: const Text(
+                            'Live Scan',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          content: const Text(
+                            'Live Scan functionality will be implemented here.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text(
+                                'OK',
+                                style: TextStyle(color: Colors.blue),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Live Scan',
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Text(
+                            'Initiates a Bluetooth command to ESP32 to begin scanning nearby networks',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: CupertinoColors.systemGrey,
+                              fontSize: 14,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: _buildDashboardButton(
+                    context,
+                    onTap: () {
+                      // TODO: Navigate to Scan Logs screen
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          backgroundColor: Colors.grey[900],
+                          title: const Text(
+                            'Scan Logs',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          content: const Text(
+                            'Scan Logs functionality will be implemented here.',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text(
+                                'OK',
+                                style: TextStyle(color: Colors.blue),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Scan Logs',
+                          style: TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8.0),
+                          child: Text(
+                            'View Scan Logs From The Device',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: CupertinoColors.systemGrey,
+                              fontSize: 14,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDashboardButton(
+    BuildContext context, {
+    required VoidCallback onTap,
+    required Widget child,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24.0),
+        decoration: BoxDecoration(
+          color: CupertinoColors.black,
+          borderRadius: BorderRadius.circular(16.0),
+          border: Border.all(color: CupertinoColors.systemGrey, width: 1),
+        ),
+        child: child,
       ),
     );
   }
