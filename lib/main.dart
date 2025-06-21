@@ -136,6 +136,15 @@ class _MyAppState extends State<MyApp> {
       themeMode: _themeMode,
       home: _getHome(),
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        DefaultMaterialLocalizations.delegate,
+        DefaultCupertinoLocalizations.delegate,
+        DefaultWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', ''), // English
+      ],
+      locale: const Locale('en', ''),
     );
   }
 }
@@ -569,26 +578,74 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   bool _internet = false;
   bool _notifications = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _checkCurrentPermissions();
+  }
+
+  Future<void> _checkCurrentPermissions() async {
+    // Check Bluetooth permissions
+    final bluetoothScan = await Permission.bluetoothScan.status;
+    final bluetoothConnect = await Permission.bluetoothConnect.status;
+    final bluetooth = bluetoothScan.isGranted && bluetoothConnect.isGranted;
+
+    // Check Location permission
+    final location = await Permission.location.status;
+
+    // Check Storage permission
+    bool storage = false;
+    if (Platform.isAndroid && (await _getAndroidSdkInt()) >= 33) {
+      // On Android 13+, no permission needed for app-private storage
+      storage = true;
+    } else {
+      final storageStatus = await Permission.storage.status;
+      storage = storageStatus.isGranted;
+    }
+
+    // Check Notification permission
+    final notifications = await Permission.notification.status;
+
+    // Internet permission is always granted on Android and iOS
+    const internet = true;
+
+    if (mounted) {
+      setState(() {
+        _bluetooth = bluetooth;
+        _location = location.isGranted;
+        _storage = storage;
+        _internet = internet;
+        _notifications = notifications.isGranted;
+      });
+    }
+  }
+
   Future<void> _onBluetoothChanged(bool? value) async {
     if (value == true) {
       final scanStatus = await Permission.bluetoothScan.request();
       final connectStatus = await Permission.bluetoothConnect.request();
-      if (scanStatus.isGranted && connectStatus.isGranted) {
-        setState(() => _bluetooth = true);
-      } else {
-        setState(() => _bluetooth = false);
+      if (mounted) {
+        setState(
+          () => _bluetooth = scanStatus.isGranted && connectStatus.isGranted,
+        );
       }
     } else {
-      setState(() => _bluetooth = false);
+      if (mounted) {
+        setState(() => _bluetooth = false);
+      }
     }
   }
 
   Future<void> _onLocationChanged(bool? value) async {
     if (value == true) {
       final status = await Permission.location.request();
-      setState(() => _location = status.isGranted);
+      if (mounted) {
+        setState(() => _location = status.isGranted);
+      }
     } else {
-      setState(() => _location = false);
+      if (mounted) {
+        setState(() => _location = false);
+      }
     }
   }
 
@@ -596,55 +653,77 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     if (value == true) {
       if (Platform.isAndroid && (await _getAndroidSdkInt()) >= 33) {
         // On Android 13+, no permission needed for app-private storage
-        setState(() => _storage = true);
+        if (mounted) {
+          setState(() => _storage = true);
+        }
       } else {
         final status = await Permission.storage.request();
-        setState(() => _storage = status.isGranted);
+        if (mounted) {
+          setState(() => _storage = status.isGranted);
+        }
       }
     } else {
-      setState(() => _storage = false);
+      if (mounted) {
+        setState(() => _storage = false);
+      }
     }
   }
 
   Future<int> _getAndroidSdkInt() async {
-    // Use platform channel or package_info_plus for a robust solution, but for now:
-    return (await Permission.storage.status).isGranted
-        ? 32
-        : 33; // fallback, always allow on 33+
+    if (Platform.isAndroid) {
+      final storageStatus = await Permission.storage.status;
+      // This is a simplified way to check. In a production app, you'd want to use
+      // package_info_plus or platform channels to get the actual SDK version
+      return storageStatus.isGranted ? 32 : 33;
+    }
+    return 33; // Default to latest for non-Android platforms
   }
 
   Future<void> _onNotificationChanged(bool? value) async {
     if (value == true) {
       final status = await Permission.notification.request();
-      setState(() => _notifications = status.isGranted);
+      if (mounted) {
+        setState(() => _notifications = status.isGranted);
+      }
     } else {
-      setState(() => _notifications = false);
+      if (mounted) {
+        setState(() => _notifications = false);
+      }
     }
+  }
+
+  Future<void> _openAppSettings() async {
+    await openAppSettings();
   }
 
   @override
   Widget build(BuildContext context) {
     final allEnabled =
         _bluetooth && _location && _storage && _internet && _notifications;
-    return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.black,
-      child: Material(
-        type: MaterialType.transparency,
+
+    return Material(
+      child: CupertinoPageScaffold(
+        backgroundColor: CupertinoColors.black,
+        navigationBar: CupertinoNavigationBar(
+          backgroundColor: CupertinoColors.black,
+          border: null,
+          middle: const Text(
+            'Permissions Required',
+            style: TextStyle(
+              color: CupertinoColors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+              fontFamily: 'Barlow',
+            ),
+          ),
+        ),
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Permissions Required',
-                  style: TextStyle(
-                    color: CupertinoColors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'Barlow',
-                  ),
-                ),
                 const SizedBox(height: 24),
                 PermissionCheckboxTile(
                   title: 'Bluetooth',
@@ -670,7 +749,10 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   title: 'Internet',
                   explanation: 'For getting AI results.',
                   value: _internet,
-                  onChanged: (val) => setState(() => _internet = val ?? false),
+                  onChanged:
+                      (
+                        _,
+                      ) {}, // Internet permission is always granted, but we need a no-op function
                 ),
                 PermissionCheckboxTile(
                   title: 'Notifications',
@@ -679,6 +761,21 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   onChanged: _onNotificationChanged,
                 ),
                 const Spacer(),
+                if (!allEnabled) ...[
+                  Center(
+                    child: CupertinoButton(
+                      onPressed: _openAppSettings,
+                      child: const Text(
+                        'Open Settings',
+                        style: TextStyle(
+                          color: CupertinoColors.activeBlue,
+                          fontFamily: 'Barlow',
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
                 SizedBox(
                   width: double.infinity,
                   child: CupertinoButton.filled(
@@ -686,11 +783,13 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                         ? () async {
                             final prefs = await SharedPreferences.getInstance();
                             await prefs.setBool('permissionsGranted', true);
-                            Navigator.of(context).pushReplacement(
-                              CupertinoPageRoute(
-                                builder: (_) => const DashboardScreen(),
-                              ),
-                            );
+                            if (mounted) {
+                              Navigator.of(context).pushReplacement(
+                                CupertinoPageRoute(
+                                  builder: (_) => const DashboardScreen(),
+                                ),
+                              );
+                            }
                           }
                         : null,
                     child: const Text(
@@ -734,6 +833,7 @@ class PermissionCheckboxTile extends StatelessWidget {
             children: [
               Text(
                 title,
+                textDirection: TextDirection.ltr,
                 style: const TextStyle(
                   color: CupertinoColors.activeBlue,
                   fontSize: 20,
@@ -747,6 +847,7 @@ class PermissionCheckboxTile extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             explanation,
+            textDirection: TextDirection.ltr,
             style: const TextStyle(
               color: CupertinoColors.systemGrey,
               fontSize: 16,
@@ -987,20 +1088,19 @@ We reserve the right to update these Terms at any time. Continued use of the app
                   onTap: () => _showThemeDialog(),
                 ),
                 ListTile(
-                  leading: Icon(CupertinoIcons.doc_text_fill, color: textColor),
-                  title: Text(
-                    'Terms & Conditions',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                  ),
-                  onTap: _openTerms,
-                ),
-                ListTile(
                   leading: Icon(CupertinoIcons.settings, color: textColor),
                   title: Text(
                     'Settings',
                     style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      CupertinoPageRoute(
+                        builder: (_) => const SettingsScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),
@@ -1176,6 +1276,474 @@ We reserve the right to update these Terms at any time. Continued use of the app
           border: Border.all(color: theme.dividerColor, width: 1),
         ),
         child: child,
+      ),
+    );
+  }
+}
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
+    return CupertinoPageScaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        border: null,
+        middle: Text(
+          'SETTINGS',
+          style: TextStyle(
+            color: textColor,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 4,
+            fontFamily: 'Barlow',
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: ListView(
+          children: [
+            _buildSettingsTile(
+              context,
+              icon: CupertinoIcons.person,
+              title: 'Edit Name',
+              onTap: () async {
+                final prefs = await SharedPreferences.getInstance();
+                final currentName = prefs.getString('username') ?? '';
+                if (context.mounted) {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder: (_) => EditNameScreen(currentName: currentName),
+                    ),
+                  );
+                }
+              },
+            ),
+            _buildSettingsTile(
+              context,
+              icon: CupertinoIcons.bluetooth,
+              title: 'Connect / Disconnect Device',
+              onTap: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const DevicesScreen()),
+                );
+              },
+            ),
+            _buildSettingsTile(
+              context,
+              icon: CupertinoIcons.doc_text,
+              title: 'Terms and Conditions',
+              onTap: () {
+                _openTerms(context);
+              },
+            ),
+            _buildSettingsTile(
+              context,
+              icon: CupertinoIcons.info,
+              title: 'About Us',
+              onTap: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(builder: (_) => const AboutUsScreen()),
+                );
+              },
+            ),
+            _buildSettingsTile(
+              context,
+              icon: CupertinoIcons.shield,
+              title: 'Permissions',
+              onTap: () {
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder: (_) => const PermissionsScreen(name: ''),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSettingsTile(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+          child: Row(
+            children: [
+              Icon(icon, color: textColor),
+              const SizedBox(width: 16),
+              Text(
+                title,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 18,
+                  fontFamily: 'Barlow',
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                CupertinoIcons.chevron_right,
+                color: textColor.withOpacity(0.5),
+                size: 20,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openTerms(BuildContext context) {
+    showCupertinoDialog(
+      context: context,
+      builder: (context) => CupertinoAlertDialog(
+        title: const Text('Terms and Conditions'),
+        content: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 16.0),
+            child: Text(
+              '''Last updated: June 2025
+
+Welcome to ZYNC — your personal portable WiFi security scanner.
+
+By using the ZYNC mobile application and hardware device (collectively referred to as the "Service"), you agree to the following Terms and Conditions. Please read them carefully.
+
+1. Acceptance of Terms
+By accessing or using ZYNC, you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, do not use the app or device.
+
+2. Description of Service
+ZYNC allows users to:
+\u2022 Scan nearby WiFi networks using a portable device.
+\u2022 Display details such as SSID, encryption type, and potential risks.
+\u2022 Connect the device to the mobile app via Bluetooth to view live scan data.
+\u2022 Store and view scan logs through the mobile app.
+
+The app and device are intended to inform and assist users in identifying potentially insecure WiFi connections. It does not interfere, tamper with, or access any network content.
+
+3. User Responsibility
+You agree to use ZYNC only for lawful purposes. You shall not:
+\u2022 Attempt unauthorized access to networks.
+\u2022 Use the device/app for hacking, eavesdropping, or packet sniffing.
+\u2022 Share inaccurate or misleading scan data.
+
+ZYNC is a passive scanner — it does not connect to any network without user consent.
+
+4. Data Collection and Privacy
+ZYNC may collect:
+\u2022 Scan metadata (SSID, signal strength, encryption type).
+\u2022 Device information (non-personally identifiable).
+\u2022 App usage statistics (for performance improvements).
+
+All data remains local to the user's device unless manually exported. ZYNC does not share your data with third parties.
+
+5. No Warranty
+ZYNC is provided on an "as-is" basis. We do not guarantee:
+\u2022 The accuracy or completeness of scan results.
+\u2022 That all security threats will be detected.
+\u2022 Uninterrupted or error-free operation.
+
+You are solely responsible for how you act based on scan data.
+
+6. Limitation of Liability
+In no event shall ZYNC, its developers, or affiliates be liable for:
+\u2022 Any damage caused by reliance on scan results.
+\u2022 Loss of data, network issues, or unauthorized access.
+\u2022 Any indirect or consequential losses.
+
+7. Modifications to Terms
+We reserve the right to update these Terms at any time. Continued use of the app or device after changes means you accept the updated terms.''',
+              textAlign: TextAlign.left,
+              style: TextStyle(
+                color: CupertinoTheme.of(context).textTheme.textStyle.color,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text('Close'),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class EditNameScreen extends StatefulWidget {
+  final String currentName;
+
+  const EditNameScreen({super.key, required this.currentName});
+
+  @override
+  State<EditNameScreen> createState() => _EditNameScreenState();
+}
+
+class _EditNameScreenState extends State<EditNameScreen> {
+  late TextEditingController _controller;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.currentName);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveName() async {
+    final name = _controller.text.trim();
+    if (name.isNotEmpty) {
+      setState(() => _loading = true);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('username', name);
+      setState(() => _loading = false);
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
+    return CupertinoPageScaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
+      navigationBar: CupertinoNavigationBar(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        border: null,
+        middle: Text(
+          'EDIT NAME',
+          style: TextStyle(
+            color: textColor,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 4,
+            fontFamily: 'Barlow',
+          ),
+        ),
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              CupertinoTextField(
+                controller: _controller,
+                placeholder: 'Enter your name',
+                style: TextStyle(color: textColor),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.scaffoldBackgroundColor,
+                  border: Border.all(color: theme.dividerColor),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              const SizedBox(height: 24),
+              CupertinoButton.filled(
+                onPressed: _loading ? null : _saveName,
+                child: _loading
+                    ? const CupertinoActivityIndicator()
+                    : const Text('Save'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class DevicesScreen extends StatelessWidget {
+  const DevicesScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
+    return Material(
+      child: CupertinoPageScaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        navigationBar: CupertinoNavigationBar(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          border: null,
+          middle: Text(
+            'DEVICES',
+            style: TextStyle(
+              color: textColor,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+              fontFamily: 'Barlow',
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Spacer(),
+                Icon(
+                  CupertinoIcons.bluetooth,
+                  size: 48,
+                  color: textColor.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No devices found',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Barlow',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Make sure your ZYNC device is powered on and within range',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: textColor.withOpacity(0.7),
+                    fontSize: 16,
+                    fontFamily: 'Barlow',
+                  ),
+                ),
+                const SizedBox(height: 24),
+                CupertinoButton.filled(
+                  onPressed: () {
+                    // TODO: Implement device scanning
+                  },
+                  child: const Text('Scan for Devices'),
+                ),
+                const Spacer(),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AboutUsScreen extends StatelessWidget {
+  const AboutUsScreen({super.key});
+
+  Widget _buildFeatureItem(BuildContext context, String text) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4.0),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: textColor.withOpacity(0.7),
+          fontSize: 16,
+          height: 1.5,
+          fontFamily: 'Barlow',
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textColor =
+        theme.textTheme.bodyLarge?.color ??
+        (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+
+    return Material(
+      child: CupertinoPageScaffold(
+        backgroundColor: theme.scaffoldBackgroundColor,
+        navigationBar: CupertinoNavigationBar(
+          backgroundColor: theme.scaffoldBackgroundColor,
+          border: null,
+          middle: Text(
+            'ABOUT US',
+            style: TextStyle(
+              color: textColor,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 4,
+              fontFamily: 'Barlow',
+            ),
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ZYNC is your personal portable WiFi security scanner, designed to help you identify and assess the security of wireless networks around you. Our mission is to make network security accessible and understandable for everyone.',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 16,
+                    height: 1.5,
+                    fontFamily: 'Barlow',
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Features:',
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Barlow',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _buildFeatureItem(context, '• Real-time WiFi network scanning'),
+                _buildFeatureItem(context, '• Detailed security analysis'),
+                _buildFeatureItem(context, '• User-friendly interface'),
+                _buildFeatureItem(context, '• Portable hardware device'),
+                _buildFeatureItem(context, '• Comprehensive scan logs'),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
