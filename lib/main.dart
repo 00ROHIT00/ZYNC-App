@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:math';
+import 'dart:ui'; // Add this import for ImageFilter
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
@@ -581,6 +582,78 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   bool _internet = false;
   bool _notifications = false;
 
+  void _showToast(BuildContext context, String message) {
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 100.0,
+        left: 24.0,
+        right: 24.0,
+        child: SafeArea(
+          child: Material(
+            color: Colors.transparent,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(25.0),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey6.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(25.0),
+                    border: Border.all(
+                      color: CupertinoColors.systemGrey5.withOpacity(0.5),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.arrow_left_circle,
+                        color: CupertinoTheme.of(context).primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: CupertinoTheme.of(
+                              context,
+                            ).textTheme.textStyle.color,
+                            fontSize: 16.0,
+                            fontWeight: FontWeight.w500,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+
+    // Add a fade-in animation
+    overlayEntry.markNeedsBuild();
+
+    // Remove after delay with fade-out
+    Future.delayed(const Duration(seconds: 2), () {
+      overlayEntry.remove();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -628,9 +701,14 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       final scanStatus = await Permission.bluetoothScan.request();
       final connectStatus = await Permission.bluetoothConnect.request();
       if (mounted) {
-        setState(
-          () => _bluetooth = scanStatus.isGranted && connectStatus.isGranted,
-        );
+        final granted = scanStatus.isGranted && connectStatus.isGranted;
+        setState(() => _bluetooth = granted);
+        if (!granted) {
+          _showToast(
+            context,
+            'Bluetooth permission is required. Please enable it in Settings.',
+          );
+        }
       }
     } else {
       if (mounted) {
@@ -644,6 +722,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       final status = await Permission.location.request();
       if (mounted) {
         setState(() => _location = status.isGranted);
+        if (!status.isGranted) {
+          _showToast(
+            context,
+            'Location permission is required. Please enable it in Settings.',
+          );
+        }
       }
     } else {
       if (mounted) {
@@ -663,6 +747,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
         final status = await Permission.storage.request();
         if (mounted) {
           setState(() => _storage = status.isGranted);
+          if (!status.isGranted) {
+            _showToast(
+              context,
+              'Storage permission is required. Please enable it in Settings.',
+            );
+          }
         }
       }
     } else {
@@ -687,6 +777,12 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
       final status = await Permission.notification.request();
       if (mounted) {
         setState(() => _notifications = status.isGranted);
+        if (!status.isGranted) {
+          _showToast(
+            context,
+            'Notification permission is required. Please enable it in Settings.',
+          );
+        }
       }
     } else {
       if (mounted) {
@@ -874,6 +970,90 @@ class _DashboardScreenState extends State<DashboardScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
   bool _isHovering = false;
+  DateTime? _lastBackPressTime;
+
+  void _showToast(BuildContext context, String message) {
+    final overlay = Overlay.of(context);
+    final overlayEntry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 100.0,
+        left: 24.0,
+        right: 24.0,
+        child: SafeArea(
+          child: Material(
+            color: Colors.transparent,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(25.0),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24.0,
+                    vertical: 16.0,
+                  ),
+                  decoration: BoxDecoration(
+                    color: CupertinoColors.systemGrey6.withOpacity(0.7),
+                    borderRadius: BorderRadius.circular(25.0),
+                    border: Border.all(
+                      color: CupertinoColors.systemGrey5.withOpacity(0.5),
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        CupertinoIcons.arrow_left_circle,
+                        color: CupertinoTheme.of(context).primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: CupertinoTheme.of(
+                              context,
+                            ).textTheme.textStyle.color,
+                            fontSize: 16.0,
+                            fontWeight: FontWeight.w500,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(overlayEntry);
+
+    // Add a fade-in animation
+    overlayEntry.markNeedsBuild();
+
+    // Remove after delay with fade-out
+    Future.delayed(const Duration(seconds: 2), () {
+      overlayEntry.remove();
+    });
+  }
+
+  Future<bool> _onWillPop() async {
+    final now = DateTime.now();
+    if (_lastBackPressTime == null ||
+        now.difference(_lastBackPressTime!) > const Duration(seconds: 2)) {
+      _lastBackPressTime = now;
+      _showToast(context, 'Swipe back again to exit');
+      return false;
+    }
+    return true;
+  }
 
   @override
   void initState() {
@@ -1071,161 +1251,69 @@ We reserve the right to update these Terms at any time. Continued use of the app
         theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
-    return Material(
-      child: Scaffold(
-        backgroundColor: theme.scaffoldBackgroundColor,
-        appBar: CupertinoNavigationBar(
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Material(
+        child: Scaffold(
           backgroundColor: theme.scaffoldBackgroundColor,
-          border: null,
-          leading: Builder(
-            builder: (context) => CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () => Scaffold.of(context).openDrawer(),
-              child: Icon(CupertinoIcons.bars, color: textColor),
+          appBar: CupertinoNavigationBar(
+            backgroundColor: theme.scaffoldBackgroundColor,
+            border: null,
+            leading: Builder(
+              builder: (context) => CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () => Scaffold.of(context).openDrawer(),
+                child: Icon(CupertinoIcons.bars, color: textColor),
+              ),
+            ),
+            middle: Text(
+              'ZYNC',
+              style: TextStyle(
+                color: textColor,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 8,
+                fontFamily: 'Barlow',
+              ),
             ),
           ),
-          middle: Text(
-            'ZYNC',
-            style: TextStyle(
-              color: textColor,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 8,
-              fontFamily: 'Barlow',
-            ),
-          ),
-        ),
-        drawer: Drawer(
-          child: Container(
-            color: theme.canvasColor,
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                DrawerHeader(
-                  decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor,
-                  ),
-                  child: Text(
-                    'ZYNC',
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 8,
-                      fontFamily: 'Barlow',
+          drawer: Drawer(
+            child: Container(
+              color: theme.canvasColor,
+              child: ListView(
+                padding: EdgeInsets.zero,
+                children: [
+                  DrawerHeader(
+                    decoration: BoxDecoration(
+                      color: theme.scaffoldBackgroundColor,
+                    ),
+                    child: Text(
+                      'ZYNC',
+                      style: TextStyle(
+                        color: textColor,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 8,
+                        fontFamily: 'Barlow',
+                      ),
                     ),
                   ),
-                ),
-                ListTile(
-                  leading: Icon(CupertinoIcons.home, color: textColor),
-                  title: Text(
-                    'Home',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                  ListTile(
+                    leading: Icon(CupertinoIcons.home, color: textColor),
+                    title: Text(
+                      'Home',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
+                    onTap: () => Navigator.of(context).pop(),
                   ),
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                ListTile(
-                  leading: Icon(CupertinoIcons.add, color: textColor),
-                  title: Text(
-                    'Add a device',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop(); // Close drawer
-                    Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (context) => const AddDeviceScreen(),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: Icon(CupertinoIcons.wifi, color: textColor),
-                  title: Text(
-                    'Live Scan',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop(); // Close drawer
-                    Navigator.push(
-                      context,
-                      CupertinoPageRoute(
-                        builder: (context) => const LiveScanScreen(),
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: Icon(CupertinoIcons.doc_text, color: textColor),
-                  title: Text(
-                    'Scan Logs',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop(); // Close drawer
-                    // TODO: Replace with actual Scan Logs screen when available
-                    showDialog(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Scan Logs'),
-                        content: const Text(
-                          'Scan Logs functionality will be implemented here.',
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('OK'),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-                ListTile(
-                  leading: Icon(CupertinoIcons.doc_text, color: textColor),
-                  title: Text(
-                    'Scan Logs',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                  ),
-                  onTap: () => Navigator.of(context).pop(),
-                ),
-                ListTile(
-                  leading: Icon(CupertinoIcons.device_laptop, color: textColor),
-                  title: Text(
-                    'Theme',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                  ),
-                  onTap: () => _showThemeDialog(),
-                ),
-                ListTile(
-                  leading: Icon(CupertinoIcons.settings, color: textColor),
-                  title: Text(
-                    'Settings',
-                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                  ),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      CupertinoPageRoute(
-                        builder: (_) => const SettingsScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-        ),
-        body: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              children: [
-                Expanded(
-                  child: _buildDashboardButton(
-                    context,
+                  ListTile(
+                    leading: Icon(CupertinoIcons.add, color: textColor),
+                    title: Text(
+                      'Add a device',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
                     onTap: () {
+                      Navigator.of(context).pop(); // Close drawer
                       Navigator.push(
                         context,
                         CupertinoPageRoute(
@@ -1233,39 +1321,15 @@ We reserve the right to update these Terms at any time. Continued use of the app
                         ),
                       );
                     },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildAnimatedAddIcon(textColor),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Add Device',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Connect a new ZYNC device',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: theme.textTheme.bodySmall?.color,
-                            fontSize: 14,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: _buildDashboardButton(
-                    context,
+                  ListTile(
+                    leading: Icon(CupertinoIcons.wifi, color: textColor),
+                    title: Text(
+                      'Live Scan',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
                     onTap: () {
+                      Navigator.of(context).pop(); // Close drawer
                       Navigator.push(
                         context,
                         CupertinoPageRoute(
@@ -1273,40 +1337,16 @@ We reserve the right to update these Terms at any time. Continued use of the app
                         ),
                       );
                     },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildAnimatedScanIcon(textColor),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Live Scan',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Start a new network scan',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: theme.textTheme.bodySmall?.color,
-                            fontSize: 14,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: _buildDashboardButton(
-                    context,
+                  ListTile(
+                    leading: Icon(CupertinoIcons.doc_text, color: textColor),
+                    title: Text(
+                      'Scan Logs',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
                     onTap: () {
-                      // TODO: Navigate to Scan Logs screen
+                      Navigator.of(context).pop(); // Close drawer
+                      // TODO: Replace with actual Scan Logs screen when available
                       showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
@@ -1323,85 +1363,231 @@ We reserve the right to update these Terms at any time. Continued use of the app
                         ),
                       );
                     },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildAnimatedLogsIcon(textColor),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Scan Logs',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'View scan history and reports',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: theme.textTheme.bodySmall?.color,
-                            fontSize: 14,
-                            fontFamily: 'Barlow',
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
-                Expanded(
-                  child: _buildDashboardButton(
-                    context,
+                  ListTile(
+                    leading: Icon(CupertinoIcons.doc_text, color: textColor),
+                    title: Text(
+                      'Scan Logs',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
+                    onTap: () => Navigator.of(context).pop(),
+                  ),
+                  ListTile(
+                    leading: Icon(
+                      CupertinoIcons.device_laptop,
+                      color: textColor,
+                    ),
+                    title: Text(
+                      'Theme',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
+                    onTap: () => _showThemeDialog(),
+                  ),
+                  ListTile(
+                    leading: Icon(CupertinoIcons.settings, color: textColor),
+                    title: Text(
+                      'Settings',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
                     onTap: () {
-                      // TODO: Implement export logs functionality
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Export Logs'),
-                          content: const Text(
-                            'Export logs functionality will be implemented here.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
-                            ),
-                          ],
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(
+                          builder: (_) => const SettingsScreen(),
                         ),
                       );
                     },
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildAnimatedExportIcon(textColor),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Export Logs',
-                          style: TextStyle(
-                            color: textColor,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Barlow',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          body: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: _buildDashboardButton(
+                      context,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          CupertinoPageRoute(
+                            builder: (context) => const AddDeviceScreen(),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Export scan logs to CSV or PDF',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: theme.textTheme.bodySmall?.color,
-                            fontSize: 14,
-                            fontFamily: 'Barlow',
+                        );
+                      },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildAnimatedAddIcon(textColor),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Add Device',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Barlow',
+                            ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 8),
+                          Text(
+                            'Connect a new ZYNC device',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: theme.textTheme.bodySmall?.color,
+                              fontSize: 14,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: _buildDashboardButton(
+                      context,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          CupertinoPageRoute(
+                            builder: (context) => const LiveScanScreen(),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildAnimatedScanIcon(textColor),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Live Scan',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Start a new network scan',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: theme.textTheme.bodySmall?.color,
+                              fontSize: 14,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: _buildDashboardButton(
+                      context,
+                      onTap: () {
+                        // TODO: Navigate to Scan Logs screen
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Scan Logs'),
+                            content: const Text(
+                              'Scan Logs functionality will be implemented here.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('OK'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildAnimatedLogsIcon(textColor),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Scan Logs',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'View scan history and reports',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: theme.textTheme.bodySmall?.color,
+                              fontSize: 14,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: _buildDashboardButton(
+                      context,
+                      onTap: () {
+                        // TODO: Implement export logs functionality
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Export Logs'),
+                            content: const Text(
+                              'Export logs functionality will be implemented here.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('OK'),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildAnimatedExportIcon(textColor),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Export Logs',
+                            style: TextStyle(
+                              color: textColor,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Export scan logs to CSV or PDF',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: theme.textTheme.bodySmall?.color,
+                              fontSize: 14,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
