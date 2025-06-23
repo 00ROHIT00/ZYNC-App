@@ -1,9 +1,12 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
+import 'screens/add_device_screen.dart';
+import 'screens/live_scan_screen.dart';
 
 // Global theme state
 ThemeMode currentThemeMode = ThemeMode.system;
@@ -867,7 +870,73 @@ class DashboardScreen extends StatefulWidget {
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class _DashboardScreenState extends State<DashboardScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+  bool _isHovering = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildAnimatedAddIcon(Color color) {
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Icon(CupertinoIcons.add, color: color, size: 32);
+      },
+    );
+  }
+
+  Widget _buildAnimatedScanIcon(Color color) {
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(CupertinoIcons.wifi, color: color.withOpacity(0.3), size: 32),
+            Icon(CupertinoIcons.wifi, color: color.withOpacity(0.6), size: 32),
+            Icon(CupertinoIcons.wifi, color: color, size: 32),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildAnimatedLogsIcon(Color color) {
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        return Icon(CupertinoIcons.doc_text, color: color, size: 32);
+      },
+    );
+  }
+
+  Widget _buildAnimatedExportIcon(Color color) {
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        final value = sin(_animationController.value * pi);
+        return Transform.translate(
+          offset: Offset(0, value * 2),
+          child: Icon(CupertinoIcons.arrow_up_doc, color: color, size: 32),
+        );
+      },
+    );
+  }
+
   void _showThemeDialog() {
     showDialog(
       context: context,
@@ -1061,7 +1130,15 @@ We reserve the right to update these Terms at any time. Continued use of the app
                     'Add a device',
                     style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () {
+                    Navigator.of(context).pop(); // Close drawer
+                    Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (context) => const AddDeviceScreen(),
+                      ),
+                    );
+                  },
                 ),
                 ListTile(
                   leading: Icon(CupertinoIcons.wifi, color: textColor),
@@ -1069,7 +1146,41 @@ We reserve the right to update these Terms at any time. Continued use of the app
                     'Live Scan',
                     style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                   ),
-                  onTap: () => Navigator.of(context).pop(),
+                  onTap: () {
+                    Navigator.of(context).pop(); // Close drawer
+                    Navigator.push(
+                      context,
+                      CupertinoPageRoute(
+                        builder: (context) => const LiveScanScreen(),
+                      ),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: Icon(CupertinoIcons.doc_text, color: textColor),
+                  title: Text(
+                    'Scan Logs',
+                    style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                  ),
+                  onTap: () {
+                    Navigator.of(context).pop(); // Close drawer
+                    // TODO: Replace with actual Scan Logs screen when available
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Scan Logs'),
+                        content: const Text(
+                          'Scan Logs functionality will be implemented here.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 ListTile(
                   leading: Icon(CupertinoIcons.doc_text, color: textColor),
@@ -1115,33 +1226,34 @@ We reserve the right to update these Terms at any time. Continued use of the app
                   child: _buildDashboardButton(
                     context,
                     onTap: () {
-                      // TODO: Navigate to Add Device screen
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Add Device'),
-                          content: const Text(
-                            'Add Device functionality will be implemented here.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
-                            ),
-                          ],
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (context) => const AddDeviceScreen(),
                         ),
                       );
                     },
-                    child: Row(
+                    child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(CupertinoIcons.add, color: textColor),
-                        const SizedBox(width: 12),
+                        _buildAnimatedAddIcon(textColor),
+                        const SizedBox(height: 16),
                         Text(
                           'Add Device',
                           style: TextStyle(
                             color: textColor,
                             fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Connect a new ZYNC device',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: theme.textTheme.bodySmall?.color,
+                            fontSize: 14,
                             fontFamily: 'Barlow',
                           ),
                         ),
@@ -1154,26 +1266,18 @@ We reserve the right to update these Terms at any time. Continued use of the app
                   child: _buildDashboardButton(
                     context,
                     onTap: () {
-                      // TODO: Navigate to Live Scan screen
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Live Scan'),
-                          content: const Text(
-                            'Live Scan functionality will be implemented here.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
-                            ),
-                          ],
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (context) => const LiveScanScreen(),
                         ),
                       );
                     },
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        _buildAnimatedScanIcon(textColor),
+                        const SizedBox(height: 16),
                         Text(
                           'Live Scan',
                           style: TextStyle(
@@ -1184,16 +1288,13 @@ We reserve the right to update these Terms at any time. Continued use of the app
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Text(
-                            'Initiates a Bluetooth command to ESP32 to begin scanning nearby networks',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: theme.textTheme.bodySmall?.color,
-                              fontSize: 14,
-                              fontFamily: 'Barlow',
-                            ),
+                        Text(
+                          'Start a new network scan',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: theme.textTheme.bodySmall?.color,
+                            fontSize: 14,
+                            fontFamily: 'Barlow',
                           ),
                         ),
                       ],
@@ -1225,6 +1326,8 @@ We reserve the right to update these Terms at any time. Continued use of the app
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        _buildAnimatedLogsIcon(textColor),
+                        const SizedBox(height: 16),
                         Text(
                           'Scan Logs',
                           style: TextStyle(
@@ -1235,16 +1338,63 @@ We reserve the right to update these Terms at any time. Continued use of the app
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Text(
-                            'View Scan Logs From The Device',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: theme.textTheme.bodySmall?.color,
-                              fontSize: 14,
-                              fontFamily: 'Barlow',
+                        Text(
+                          'View scan history and reports',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: theme.textTheme.bodySmall?.color,
+                            fontSize: 14,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: _buildDashboardButton(
+                    context,
+                    onTap: () {
+                      // TODO: Implement export logs functionality
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Export Logs'),
+                          content: const Text(
+                            'Export logs functionality will be implemented here.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('OK'),
                             ),
+                          ],
+                        ),
+                      );
+                    },
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildAnimatedExportIcon(textColor),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Export Logs',
+                          style: TextStyle(
+                            color: textColor,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Barlow',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Export scan logs to CSV or PDF',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: theme.textTheme.bodySmall?.color,
+                            fontSize: 14,
+                            fontFamily: 'Barlow',
                           ),
                         ),
                       ],
