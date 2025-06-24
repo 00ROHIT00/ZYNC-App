@@ -1853,76 +1853,239 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _openTerms(BuildContext context) {
-    showCupertinoDialog(
-      context: context,
-      builder: (context) => CupertinoAlertDialog(
-        title: const Text('Terms and Conditions'),
-        content: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 16.0),
-            child: Text(
-              '''Last updated: June 2025
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return FadeTransition(
+            opacity: animation,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                color: CupertinoTheme.of(
+                  context,
+                ).scaffoldBackgroundColor.withOpacity(0.95),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: CupertinoTheme.of(
+                            context,
+                          ).scaffoldBackgroundColor,
+                          border: Border(
+                            bottom: BorderSide(
+                              color: CupertinoTheme.of(
+                                context,
+                              ).textTheme.textStyle.color!.withOpacity(0.1),
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Terms and Conditions',
+                              style: TextStyle(
+                                color: CupertinoTheme.of(
+                                  context,
+                                ).textTheme.textStyle.color,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Barlow',
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () => Navigator.of(context).pop(),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: CupertinoTheme.of(
+                                    context,
+                                  ).textTheme.textStyle.color!.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Icon(
+                                  CupertinoIcons.xmark,
+                                  color: CupertinoTheme.of(
+                                    context,
+                                  ).textTheme.textStyle.color,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          physics: const BouncingScrollPhysics(),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24.0,
+                              vertical: 20.0,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildTermsSection(
+                                  context,
+                                  'Last updated: June 2025',
+                                  'Welcome to ZYNC — your personal portable WiFi security scanner.',
+                                  isHeader: true,
+                                ),
+                                _buildTermsSection(
+                                  context,
+                                  '1. Acceptance of Terms',
+                                  'By accessing or using ZYNC, you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, do not use the app or device.',
+                                ),
+                                _buildTermsSection(
+                                  context,
+                                  '2. Description of Service',
+                                  '''ZYNC allows users to:
+• Scan nearby WiFi networks using a portable device.
+• Display details such as SSID, encryption type, and potential risks.
+• Connect the device to the mobile app via Bluetooth to view live scan data.
+• Store and view scan logs through the mobile app.
 
-Welcome to ZYNC — your personal portable WiFi security scanner.
+The app and device are intended to inform and assist users in identifying potentially insecure WiFi connections. It does not interfere, tamper with, or access any network content.''',
+                                ),
+                                _buildTermsSection(
+                                  context,
+                                  '3. User Responsibility',
+                                  '''You agree to use ZYNC only for lawful purposes. You shall not:
+• Attempt unauthorized access to networks.
+• Use the device/app for hacking, eavesdropping, or packet sniffing.
+• Share inaccurate or misleading scan data.
 
-By using the ZYNC mobile application and hardware device (collectively referred to as the "Service"), you agree to the following Terms and Conditions. Please read them carefully.
+ZYNC is a passive scanner — it does not connect to any network without user consent.''',
+                                ),
+                                _buildTermsSection(
+                                  context,
+                                  '4. Data Collection and Privacy',
+                                  '''ZYNC may collect:
+• Scan metadata (SSID, signal strength, encryption type).
+• Device information (non-personally identifiable).
+• App usage statistics (for performance improvements).
 
-1. Acceptance of Terms
-By accessing or using ZYNC, you confirm that you have read, understood, and agree to be bound by these Terms. If you do not agree, do not use the app or device.
+All data remains local to the user's device unless manually exported. ZYNC does not share your data with third parties.''',
+                                ),
+                                _buildTermsSection(
+                                  context,
+                                  '5. No Warranty',
+                                  '''ZYNC is provided on an "as-is" basis. We do not guarantee:
+• The accuracy or completeness of scan results.
+• That all security threats will be detected.
+• Uninterrupted or error-free operation.
 
-2. Description of Service
-ZYNC allows users to:
-\u2022 Scan nearby WiFi networks using a portable device.
-\u2022 Display details such as SSID, encryption type, and potential risks.
-\u2022 Connect the device to the mobile app via Bluetooth to view live scan data.
-\u2022 Store and view scan logs through the mobile app.
-
-The app and device are intended to inform and assist users in identifying potentially insecure WiFi connections. It does not interfere, tamper with, or access any network content.
-
-3. User Responsibility
-You agree to use ZYNC only for lawful purposes. You shall not:
-\u2022 Attempt unauthorized access to networks.
-\u2022 Use the device/app for hacking, eavesdropping, or packet sniffing.
-\u2022 Share inaccurate or misleading scan data.
-
-ZYNC is a passive scanner — it does not connect to any network without user consent.
-
-4. Data Collection and Privacy
-ZYNC may collect:
-\u2022 Scan metadata (SSID, signal strength, encryption type).
-\u2022 Device information (non-personally identifiable).
-\u2022 App usage statistics (for performance improvements).
-
-All data remains local to the user's device unless manually exported. ZYNC does not share your data with third parties.
-
-5. No Warranty
-ZYNC is provided on an "as-is" basis. We do not guarantee:
-\u2022 The accuracy or completeness of scan results.
-\u2022 That all security threats will be detected.
-\u2022 Uninterrupted or error-free operation.
-
-You are solely responsible for how you act based on scan data.
-
-6. Limitation of Liability
-In no event shall ZYNC, its developers, or affiliates be liable for:
-\u2022 Any damage caused by reliance on scan results.
-\u2022 Loss of data, network issues, or unauthorized access.
-\u2022 Any indirect or consequential losses.
-
-7. Modifications to Terms
-We reserve the right to update these Terms at any time. Continued use of the app or device after changes means you accept the updated terms.''',
-              textAlign: TextAlign.left,
-              style: TextStyle(
-                color: CupertinoTheme.of(context).textTheme.textStyle.color,
-                fontSize: 14,
+You are solely responsible for how you act based on scan data.''',
+                                ),
+                                _buildTermsSection(
+                                  context,
+                                  '6. Limitation of Liability',
+                                  '''In no event shall ZYNC, its developers, or affiliates be liable for:
+• Any damage caused by reliance on scan results.
+• Loss of data, network issues, or unauthorized access.
+• Any indirect or consequential losses.''',
+                                ),
+                                _buildTermsSection(
+                                  context,
+                                  '7. Modifications to Terms',
+                                  'We reserve the right to update these Terms at any time. Continued use of the app or device after changes means you accept the updated terms.',
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: CupertinoTheme.of(
+                            context,
+                          ).scaffoldBackgroundColor,
+                          border: Border(
+                            top: BorderSide(
+                              color: CupertinoTheme.of(
+                                context,
+                              ).textTheme.textStyle.color!.withOpacity(0.1),
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: CupertinoButton.filled(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text(
+                                  'Close',
+                                  style: TextStyle(fontFamily: 'Barlow'),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-        actions: [
-          CupertinoDialogAction(
-            child: const Text('Close'),
-            onPressed: () => Navigator.of(context).pop(),
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          const curve = Curves.easeInOutCubic;
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
+          var offsetAnimation = animation.drive(tween);
+          return SlideTransition(position: offsetAnimation, child: child);
+        },
+      ),
+    );
+  }
+
+  Widget _buildTermsSection(
+    BuildContext context,
+    String title,
+    String content, {
+    bool isHeader = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!isHeader) ...[
+            Text(
+              title,
+              style: TextStyle(
+                color: CupertinoTheme.of(context).textTheme.textStyle.color,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Barlow',
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Text(
+            content,
+            style: TextStyle(
+              color: CupertinoTheme.of(
+                context,
+              ).textTheme.textStyle.color?.withOpacity(isHeader ? 1.0 : 0.8),
+              fontSize: isHeader ? 18 : 16,
+              height: 1.5,
+              fontFamily: 'Barlow',
+              fontWeight: isHeader ? FontWeight.w600 : FontWeight.normal,
+            ),
           ),
         ],
       ),
