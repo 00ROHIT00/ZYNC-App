@@ -1117,6 +1117,26 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
+  Widget _buildAnimatedAIIcon(Color color) {
+    return AnimatedBuilder(
+      animation: _animationController,
+      builder: (context, child) {
+        final value = sin(_animationController.value * 2 * pi);
+        return Stack(
+          alignment: Alignment.center,
+          children: [
+            Icon(
+              CupertinoIcons.sparkles,
+              color: color.withOpacity(0.3 + (value + 1) * 0.2),
+              size: 32,
+            ),
+            Icon(CupertinoIcons.sparkles, color: color, size: 32),
+          ],
+        );
+      },
+    );
+  }
+
   void _showThemeDialog() {
     showDialog(
       context: context,
@@ -1339,6 +1359,32 @@ We reserve the right to update these Terms at any time. Continued use of the app
                     },
                   ),
                   ListTile(
+                    leading: Icon(CupertinoIcons.sparkles, color: textColor),
+                    title: Text(
+                      'AI Overview',
+                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
+                    ),
+                    onTap: () {
+                      Navigator.of(context).pop(); // Close drawer
+                      // TODO: Navigate to AI Overview screen
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('AI Overview'),
+                          content: const Text(
+                            'AI-powered network analysis using Gemini API will be implemented here.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('OK'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  ListTile(
                     leading: Icon(CupertinoIcons.doc_text, color: textColor),
                     title: Text(
                       'Scan Logs',
@@ -1363,14 +1409,6 @@ We reserve the right to update these Terms at any time. Continued use of the app
                         ),
                       );
                     },
-                  ),
-                  ListTile(
-                    leading: Icon(CupertinoIcons.doc_text, color: textColor),
-                    title: Text(
-                      'Scan Logs',
-                      style: TextStyle(color: textColor, fontFamily: 'Barlow'),
-                    ),
-                    onTap: () => Navigator.of(context).pop(),
                   ),
                   ListTile(
                     leading: Icon(
@@ -1408,132 +1446,196 @@ We reserve the right to update these Terms at any time. Continued use of the app
               child: Column(
                 children: [
                   Expanded(
-                    child: _buildDashboardButton(
-                      context,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          CupertinoPageRoute(
-                            builder: (context) => const AddDeviceScreen(),
-                          ),
-                        );
-                      },
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildAnimatedAddIcon(textColor),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Add Device',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Barlow',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildDashboardButton(
+                            context,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute(
+                                  builder: (context) => const AddDeviceScreen(),
+                                ),
+                              );
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildAnimatedAddIcon(textColor),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Add Device',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Connect a new ZYNC device',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodySmall?.color,
+                                    fontSize: 14,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Connect a new ZYNC device',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: theme.textTheme.bodySmall?.color,
-                              fontSize: 14,
-                              fontFamily: 'Barlow',
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: _buildDashboardButton(
+                            context,
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute(
+                                  builder: (context) => const LiveScanScreen(),
+                                ),
+                              );
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildAnimatedScanIcon(textColor),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Live Scan',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Start a new network scan',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodySmall?.color,
+                                    fontSize: 14,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),
                   Expanded(
-                    child: _buildDashboardButton(
-                      context,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          CupertinoPageRoute(
-                            builder: (context) => const LiveScanScreen(),
-                          ),
-                        );
-                      },
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildAnimatedScanIcon(textColor),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Live Scan',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Barlow',
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _buildDashboardButton(
+                            context,
+                            onTap: () {
+                              // TODO: Navigate to Scan Logs screen
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Scan Logs'),
+                                  content: const Text(
+                                    'Scan Logs functionality will be implemented here.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                      child: const Text('OK'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildAnimatedLogsIcon(textColor),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Scan Logs',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'View scan history and reports',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodySmall?.color,
+                                    fontSize: 14,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Start a new network scan',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: theme.textTheme.bodySmall?.color,
-                              fontSize: 14,
-                              fontFamily: 'Barlow',
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(
+                          child: _buildDashboardButton(
+                            context,
+                            onTap: () {
+                              // TODO: Navigate to AI Overview screen
+                              showDialog(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('AI Overview'),
+                                  content: const Text(
+                                    'AI-powered network analysis using Gemini API will be implemented here.',
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(),
+                                      child: const Text('OK'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _buildAnimatedAIIcon(textColor),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'AI Overview',
+                                  style: TextStyle(
+                                    color: textColor,
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Gemini-powered network analysis',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    color: theme.textTheme.bodySmall?.color,
+                                    fontSize: 14,
+                                    fontFamily: 'Barlow',
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Expanded(
-                    child: _buildDashboardButton(
-                      context,
-                      onTap: () {
-                        // TODO: Navigate to Scan Logs screen
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Scan Logs'),
-                            content: const Text(
-                              'Scan Logs functionality will be implemented here.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('OK'),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _buildAnimatedLogsIcon(textColor),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Scan Logs',
-                            style: TextStyle(
-                              color: textColor,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'Barlow',
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'View scan history and reports',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: theme.textTheme.bodySmall?.color,
-                              fontSize: 14,
-                              fontFamily: 'Barlow',
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),
