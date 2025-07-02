@@ -576,7 +576,7 @@ class PermissionsScreen extends StatefulWidget {
 }
 
 class _PermissionsScreenState extends State<PermissionsScreen> {
-  bool _bluetooth = false;
+  bool _wifi = false;
   bool _location = false;
   bool _storage = false;
   bool _internet = false;
@@ -661,10 +661,10 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   }
 
   Future<void> _checkCurrentPermissions() async {
-    // Check Bluetooth permissions
-    final bluetoothScan = await Permission.bluetoothScan.status;
-    final bluetoothConnect = await Permission.bluetoothConnect.status;
-    final bluetooth = bluetoothScan.isGranted && bluetoothConnect.isGranted;
+    // Check WiFi permissions
+    final wifiScan = await Permission.nearbyWifiDevices.status;
+    final wifiState = await Permission.locationWhenInUse.status;
+    final wifi = wifiScan.isGranted && wifiState.isGranted;
 
     // Check Location permission
     final location = await Permission.location.status;
@@ -687,7 +687,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
 
     if (mounted) {
       setState(() {
-        _bluetooth = bluetooth;
+        _wifi = wifi;
         _location = location.isGranted;
         _storage = storage;
         _internet = internet;
@@ -696,23 +696,23 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
     }
   }
 
-  Future<void> _onBluetoothChanged(bool? value) async {
+  Future<void> _onWifiChanged(bool? value) async {
     if (value == true) {
-      final scanStatus = await Permission.bluetoothScan.request();
-      final connectStatus = await Permission.bluetoothConnect.request();
+      final wifiScanStatus = await Permission.nearbyWifiDevices.request();
+      final locationStatus = await Permission.locationWhenInUse.request();
       if (mounted) {
-        final granted = scanStatus.isGranted && connectStatus.isGranted;
-        setState(() => _bluetooth = granted);
+        final granted = wifiScanStatus.isGranted && locationStatus.isGranted;
+        setState(() => _wifi = granted);
         if (!granted) {
           _showToast(
             context,
-            'Bluetooth permission is required. Please enable it in Settings.',
+            'WiFi and Location permissions are required. Please enable them in Settings.',
           );
         }
       }
     } else {
       if (mounted) {
-        setState(() => _bluetooth = false);
+        setState(() => _wifi = false);
       }
     }
   }
@@ -798,7 +798,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
   @override
   Widget build(BuildContext context) {
     final allEnabled =
-        _bluetooth && _location && _storage && _internet && _notifications;
+        _wifi && _location && _storage && _internet && _notifications;
 
     return Material(
       child: CupertinoPageScaffold(
@@ -825,11 +825,10 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
               children: [
                 const SizedBox(height: 24),
                 PermissionCheckboxTile(
-                  title: 'Bluetooth',
-                  explanation:
-                      'Required for communicating with the WiFi scanner.',
-                  value: _bluetooth,
-                  onChanged: _onBluetoothChanged,
+                  title: 'WiFi',
+                  explanation: 'Required for scanning nearby WiFi networks.',
+                  value: _wifi,
+                  onChanged: _onWifiChanged,
                 ),
                 PermissionCheckboxTile(
                   title: 'Location',

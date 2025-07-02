@@ -24,14 +24,10 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
-		<key>NSBluetoothAlwaysUsageDescription</key>
-		<string>We need Bluetooth access to scan for and connect to ZYNC devices</string>
-		<key>NSBluetoothPeripheralUsageDescription</key>
-		<string>We need Bluetooth access to scan for and connect to ZYNC devices</string>
 		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-		<string>We need location access for finding nearby ZYNC devices</string>
+		<string>We need location access for finding nearby WiFi networks</string>
 		<key>NSLocationWhenInUseUsageDescription</key>
-		<string>We need location access for finding nearby ZYNC devices</string>
+		<string>We need location access for finding nearby WiFi networks</string>
 		<key>UILaunchStoryboardName</key>
 		<string>LaunchScreen</string>
 		<key>UIMainStoryboardFile</key>
