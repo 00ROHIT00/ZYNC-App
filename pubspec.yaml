@@ -40,6 +40,11 @@ dependencies:
   network_info_plus: ^4.1.0
   wifi_iot: ^0.3.18
   app_settings: ^5.1.1
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  csv: ^5.0.2
+  pdf: ^3.10.1
+  printing: ^5.11.0
 
 dev_dependencies:
   flutter_test:

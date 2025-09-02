@@ -5,6 +5,7 @@ import 'package:wifi_iot/wifi_iot.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:app_settings/app_settings.dart';
+import '../services/scan_log_db.dart';
 
 class LiveScanScreen extends StatefulWidget {
   const LiveScanScreen({super.key});
@@ -51,6 +52,23 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
           _isPhoneScanning = false;
         });
       }
+      // Persist scan results to logs
+      try {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        final payload = results
+            .map((n) => {
+                  'ssid': n.ssid,
+                  'bssid': n.mac,
+                  'security': n.security,
+                  'channel': n.channel,
+                  'rssi': n.rssi,
+                  'now': now,
+                  'risk': _assessRisk(n.security).name,
+                  'source': 'live_scan',
+                })
+            .toList();
+        await ScanLogDb().upsertNetworks(payload);
+      } catch (_) {}
     } catch (e) {
       final elapsed = DateTime.now().difference(start).inMilliseconds;
       final remaining = minimumSpinnerMs - elapsed;

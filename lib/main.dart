@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'screens/add_device_screen.dart';
 import 'screens/live_scan_screen.dart';
+import 'screens/scan_logs_screen.dart';
 import 'services/connection_service.dart';
 
 // Global theme state
@@ -1428,22 +1429,10 @@ We reserve the right to update these Terms at any time. Continued use of the app
                       style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                     ),
                     onTap: () {
-                      Navigator.of(context).pop(); // Close drawer
-                      // TODO: Replace with actual Scan Logs screen when available
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Scan Logs'),
-                          content: const Text(
-                            'Scan Logs functionality will be implemented here.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
-                            ),
-                          ],
-                        ),
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(
+                            builder: (_) => const ScanLogsScreen()),
                       );
                     },
                   ),
@@ -1575,21 +1564,10 @@ We reserve the right to update these Terms at any time. Continued use of the app
                           child: _buildDashboardButton(
                             context,
                             onTap: () {
-                              // TODO: Navigate to Scan Logs screen
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Scan Logs'),
-                                  content: const Text(
-                                    'Scan Logs functionality will be implemented here.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute(
+                                  builder: (context) => const ScanLogsScreen(),
                                 ),
                               );
                             },
@@ -1679,23 +1657,35 @@ We reserve the right to update these Terms at any time. Continued use of the app
                   Expanded(
                     child: _buildDashboardButton(
                       context,
-                      onTap: () {
-                        // TODO: Implement export logs functionality
-                        showDialog(
+                      onTap: () async {
+                        // Show format selection dialog
+                        final format = await showDialog<String>(
                           context: context,
                           builder: (context) => AlertDialog(
                             title: const Text('Export Logs'),
-                            content: const Text(
-                              'Export logs functionality will be implemented here.',
-                            ),
+                            content: const Text('Choose export format:'),
                             actions: [
                               TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('OK'),
+                                onPressed: () => Navigator.pop(context, 'csv'),
+                                child: const Text('CSV'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, 'pdf'),
+                                child: const Text('PDF'),
                               ),
                             ],
                           ),
                         );
+                        if (format != null) {
+                          // Navigate to ScanLogsScreen and trigger export
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ScanLogsScreen(exportFormat: format),
+                            ),
+                          );
+                        }
                       },
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
