@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import 'screens/add_device_screen.dart';
 import 'screens/live_scan_screen.dart';
+import 'services/connection_service.dart';
 
 // Global theme state
 ThemeMode currentThemeMode = ThemeMode.system;
@@ -62,8 +63,47 @@ class MyApp extends StatefulWidget {
       context.findAncestorStateOfType<_MyAppState>();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   ThemeMode _themeMode = currentThemeMode;
+  bool _autoDisconnectEnabled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadAutoDisconnectSetting();
+  }
+
+  Future<void> _loadAutoDisconnectSetting() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _autoDisconnectEnabled =
+          prefs.getBool('auto_disconnect_enabled') ?? false; // default is false
+    });
+  }
+
+  Future<void> _setAutoDisconnectEnabled(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_disconnect_enabled', value);
+    setState(() {
+      _autoDisconnectEnabled = value;
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached ||
+        state == AppLifecycleState.inactive) {
+      ConnectionService().handleAppExit();
+    }
+    super.didChangeAppLifecycleState(state);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   void changeTheme(ThemeMode themeMode, String themeName) async {
     setState(() {
@@ -847,10 +887,9 @@ class _PermissionsScreenState extends State<PermissionsScreen> {
                   title: 'Internet',
                   explanation: 'For getting AI results.',
                   value: _internet,
-                  onChanged:
-                      (
-                        _,
-                      ) {}, // Internet permission is always granted, but we need a no-op function
+                  onChanged: (
+                    _,
+                  ) {}, // Internet permission is always granted, but we need a no-op function
                 ),
                 PermissionCheckboxTile(
                   title: 'Notifications',
@@ -1266,8 +1305,7 @@ We reserve the right to update these Terms at any time. Continued use of the app
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ??
+    final textColor = theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
     return WillPopScope(
@@ -1514,7 +1552,7 @@ We reserve the right to update these Terms at any time. Continued use of the app
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'Start a new network scan',
+                                  'Connect to ESP32 for live scanning',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(
                                     color: theme.textTheme.bodySmall?.color,
@@ -1724,9 +1762,10 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ??
+    final textColor = theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
+    final _myAppState = MyApp.of(context);
+    final autoDisconnectEnabled = _myAppState?._autoDisconnectEnabled ?? false;
 
     return CupertinoPageScaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -1803,6 +1842,59 @@ class SettingsScreen extends StatelessWidget {
                 );
               },
             ),
+            // --- Terminate connection on exit toggle ---
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+              child: DefaultTextStyle(
+                style:
+                    Theme.of(context).textTheme.bodyLarge ?? const TextStyle(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    MergeSemantics(
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () {
+                          _myAppState?._setAutoDisconnectEnabled(
+                              !autoDisconnectEnabled);
+                        },
+                        child: Row(
+                          children: [
+                            Icon(CupertinoIcons.link, color: textColor),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Text(
+                                'Terminate connection on exit',
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 18,
+                                  fontFamily: 'Barlow',
+                                ),
+                              ),
+                            ),
+                            CupertinoSwitch(
+                              value: autoDisconnectEnabled,
+                              onChanged: (val) {
+                                _myAppState?._setAutoDisconnectEnabled(val);
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'If Enabled, Disconnect ESP32 WiFi on App Exit',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 13,
+                        fontFamily: 'Barlow',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1816,8 +1908,7 @@ class SettingsScreen extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ??
+    final textColor = theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
     return Material(
@@ -2133,8 +2224,7 @@ class _EditNameScreenState extends State<EditNameScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ??
+    final textColor = theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
     return CupertinoPageScaffold(
@@ -2191,8 +2281,7 @@ class DevicesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ??
+    final textColor = theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
     return Material(
@@ -2266,8 +2355,7 @@ class AboutUsScreen extends StatelessWidget {
 
   Widget _buildFeatureItem(BuildContext context, String text) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ??
+    final textColor = theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
     return Padding(
@@ -2287,8 +2375,7 @@ class AboutUsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textColor =
-        theme.textTheme.bodyLarge?.color ??
+    final textColor = theme.textTheme.bodyLarge?.color ??
         (theme.brightness == Brightness.dark ? Colors.white : Colors.black);
 
     return Material(

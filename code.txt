@@ -1,0 +1,463 @@
+#include <WiFi.h>
+#include <U8g2lib.h>
+#include <Wire.h>
+#include <vector>
+#include <WiFiServer.h>
+
+// OLED Setup (4-pin I²C)
+U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(
+  U8G2_R0,
+  /* clock=*/22,  // SCL pin
+  /* data=*/21,   // SDA pin
+  /* reset=*/U8X8_PIN_NONE
+);
+
+// Onboard LED
+#define LED_PIN 2
+
+// Single Button Pin
+#define BTN_CYCLE 25
+
+// WiFi
+const char* ssid = "ZYNC_Device";
+const char* password = "zync1234";
+
+// TCP Server for Live Scan
+WiFiServer tcpServer(8888);
+WiFiClient client;
+bool liveScanActive = false;
+unsigned long lastLiveScan = 0;
+const unsigned long liveScanInterval = 1000; // Scan every 1 second
+
+// Scan control
+unsigned long lastScan = 0;
+const unsigned long scanInterval = 5000;
+
+// Navigation state
+int currentIndex = 0;
+int foundNetworks = 0;
+
+// Debounce
+unsigned long lastButtonTime = 0;
+const int debounceDelay = 200;
+
+// WiFi scan data
+struct NetworkInfo {
+  String ssid;
+  String bssid;
+  int rssi;
+  int channel;
+  int frequency;
+  String encryption;
+};
+
+std::vector<NetworkInfo> networks;
+
+// Add animation variables at the top with other global variables
+int scanDots = 0;
+unsigned long lastDotUpdate = 0;
+const int dotUpdateInterval = 300; // Update dots every 300ms
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Clear startup message
+  Serial.println();
+  Serial.println("========================================");
+  Serial.println("ZYNC Device Starting Up...");
+  Serial.println("========================================");
+  
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(BTN_CYCLE, INPUT_PULLUP);
+
+  u8g2.begin();
+
+  // Splash screen
+  u8g2.clearBuffer();
+  u8g2.drawBox(0, 0, 128, 64);
+  u8g2.setDrawColor(0);
+  u8g2.setFont(u8g2_font_logisoso32_tr);
+  u8g2.setCursor((128 - u8g2.getStrWidth("ZYNC")) / 2, 48);
+  u8g2.print("ZYNC");
+  u8g2.sendBuffer();
+  delay(2000);
+
+  u8g2.setDrawColor(1);
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+  u8g2.setCursor((128 - u8g2.getStrWidth("Scanning...")) / 2, 32);
+  u8g2.print("Scanning...");
+  u8g2.sendBuffer();
+
+  WiFi.mode(WIFI_AP);
+    WiFi.softAP(ssid, password, 1, 0, 4); // channel 1, open, max 4 connections
+    WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
+    WiFi.softAPsetHostname("ZYNC_Device");
+    WiFi.setSleep(false); // Disable WiFi sleep
+
+  // Print ESP32's MAC address for device identification
+  Serial.println("=== ZYNC Device Information ===");
+  Serial.print("Device MAC Address: ");
+  Serial.println(WiFi.softAPmacAddress());
+  Serial.print("WiFi AP IP Address: ");
+  Serial.println(WiFi.softAPIP());
+  Serial.println("================================");
+
+  // Start TCP server for Live Scan with debugging
+  Serial.println();
+  Serial.println("Starting TCP server...");
+  tcpServer.begin();
+  Serial.println("TCP server started on port 8888");
+  Serial.println("Waiting for app connections...");
+  Serial.println();
+
+  // Initial scan and display first network
+  scanNetworks();
+  if (foundNetworks > 0) {
+    currentIndex = 0;
+    showNetwork(currentIndex);
+  }
+}
+
+void loop() {
+  // Handle TCP connections and Live Scan
+  handleTCPConnection();
+
+  // Periodic TCP server status debug
+  static unsigned long lastStatus = 0;
+  if (millis() - lastStatus > 2000) { // every 2 seconds
+    if (!client.connected()) {
+      Serial.println("[DEBUG] TCP server running, waiting for client...");
+    } else {
+      Serial.println("[DEBUG] TCP server: client connected.");
+    }
+    lastStatus = millis();
+  }
+
+  // Handle button presses
+  handleButton();
+  delay(50);
+}
+
+void handleTCPConnection() {
+  // Check for new client connections
+  if (!client.connected()) {
+    if (client) {
+      Serial.println("[DEBUG] Client disconnected from Live Scan.");
+      client.stop();
+    }
+    client = tcpServer.available();
+    if (client) {
+      Serial.println("========================================");
+      Serial.println("App connected for Live Scan!");
+      Serial.print("Client IP Address: ");
+      Serial.println(client.remoteIP().toString());
+      Serial.print("Client Port: ");
+      Serial.println(client.remotePort());
+      Serial.println("========================================");
+      client.println("ZYNC_LIVE_SCAN_READY");
+
+      // Show '1 Device Connected' on OLED
+      u8g2.setDrawColor(1); // Ensure text is visible
+      u8g2.clearBuffer();
+      u8g2.setFont(u8g2_font_helvB18_tr); // Bold, readable font
+      const char* msg = "1 Device Connected";
+      int16_t x = (128 - u8g2.getStrWidth(msg)) / 2;
+      int16_t y = 40; // Vertically centered for 18pt font
+      u8g2.setCursor(x, y);
+      u8g2.print(msg);
+      u8g2.sendBuffer();
+      // Prevent immediate overwrite by scan results: skip showNetwork for 2 seconds
+      delay(2000);
+    }
+    else {
+      Serial.println("No client available for Live Scan.");
+    }
+    return;
+  }
+  
+  // Handle incoming commands from app
+  if (client.available()) {
+    String command = client.readStringUntil('\n');
+    command.trim();
+    Serial.print("Received command: ");
+    Serial.println(command);
+
+    if (command == "START_LIVE_SCAN") {
+      Serial.println("[DEBUG] START_LIVE_SCAN command received.");
+      startLiveScan();
+    } else if (command == "STOP_LIVE_SCAN") {
+      Serial.println("[DEBUG] STOP_LIVE_SCAN command received.");
+      stopLiveScan();
+    } else {
+      Serial.print("[DEBUG] Unknown command received: ");
+      Serial.println(command);
+    }
+  }
+  
+  // Handle Live Scan data transmission
+  if (liveScanActive && client.connected()) {
+    if (millis() - lastLiveScan >= liveScanInterval) {
+      Serial.println("[DEBUG] Performing live scan...");
+      performLiveScan();
+      lastLiveScan = millis();
+    }
+  }
+  
+  // Check if client is still connected and responsive
+  if (client.connected()) {
+    static unsigned long lastPing = 0;
+    if (millis() - lastPing > 10000) { // Send ping every 10 seconds
+      client.println("PING");
+      lastPing = millis();
+    }
+  }
+}
+
+void startLiveScan() {
+  liveScanActive = true;
+  client.println("LIVE_SCAN_STARTED");
+  Serial.println("Live Scan started");
+  Serial.println("[DEBUG] liveScanActive set to true.");
+
+  // Show Live Scan status on OLED
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+  u8g2.setCursor((128 - u8g2.getStrWidth("Live Scan Active")) / 2, 32);
+  u8g2.print("Live Scan Active");
+  u8g2.sendBuffer();
+}
+
+void stopLiveScan() {
+  liveScanActive = false;
+  client.println("LIVE_SCAN_STOPPED");
+  Serial.println("Live Scan stopped");
+  Serial.println("[DEBUG] liveScanActive set to false.");
+
+  // Return to normal display
+  if (foundNetworks > 0) {
+    showNetwork(currentIndex);
+  }
+}
+
+void performLiveScan() {
+  // Perform a quick scan for live data
+  Serial.println("[DEBUG] Starting WiFi.scanDelete()");
+  WiFi.scanDelete();
+  Serial.println("[DEBUG] Starting WiFi.scanNetworks(true)");
+  int scanResult = WiFi.scanNetworks(true);
+
+  if (scanResult == WIFI_SCAN_FAILED) {
+    Serial.println("[DEBUG] WiFi.scanNetworks failed");
+    client.println("LIVE_SCAN_ERROR:Scan failed");
+    return;
+  }
+
+  // Wait for scan to complete (shorter timeout for live scan)
+  unsigned long startTime = millis();
+  while (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+    if (millis() - startTime > 3000) { // 3 second timeout for live scan
+      Serial.println("[DEBUG] WiFi.scanComplete timeout");
+      client.println("LIVE_SCAN_ERROR:Timeout");
+      return;
+    }
+    delay(50);
+  }
+
+  int liveScanNetworks = WiFi.scanComplete();
+  Serial.print("[DEBUG] WiFi.scanComplete result: ");
+  Serial.println(liveScanNetworks);
+  if (liveScanNetworks == WIFI_SCAN_FAILED) {
+    Serial.println("[DEBUG] WiFi.scanComplete failed");
+    client.println("LIVE_SCAN_ERROR:Scan failed");
+    return;
+  }
+
+  // Send live scan data to app
+  client.print("LIVE_DATA:");
+  client.print(liveScanNetworks);
+  client.print(":");
+
+  for (int i = 0; i < liveScanNetworks && i < 20; i++) { // Limit to 20 networks
+    client.print(WiFi.SSID(i));
+    client.print(",");
+    client.print(WiFi.BSSIDstr(i));
+    client.print(",");
+    client.print(WiFi.RSSI(i));
+    client.print(",");
+    client.print(WiFi.channel(i));
+    client.print(",");
+    client.print(translateEncryptionType(WiFi.encryptionType(i)));
+
+    if (i < liveScanNetworks - 1 && i < 19) {
+      client.print(";");
+    }
+  }
+  client.println();
+
+  Serial.print("Live scan sent: ");
+  Serial.print(liveScanNetworks);
+  Serial.println(" networks");
+  Serial.println("[DEBUG] Live scan data sent to app.");
+}
+
+void scanNetworks() {
+  // Show scanning message on screen
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+  u8g2.setCursor((128 - u8g2.getStrWidth("Scanning...")) / 2, 32);
+  u8g2.print("Scanning...");
+  u8g2.sendBuffer();
+  
+  // Start the scan with a timeout
+  WiFi.scanDelete(); // Clear any previous scan
+  int scanResult = WiFi.scanNetworks(true); // Start async scan
+  
+  if (scanResult == WIFI_SCAN_FAILED) {
+    Serial.println("Scan failed to start");
+    foundNetworks = 0;
+    digitalWrite(LED_PIN, LOW);
+    return;
+  }
+  
+  // Wait for scan to complete with timeout and rapid LED blinking
+  unsigned long startTime = millis();
+  unsigned long lastBlinkTime = 0;
+  bool ledState = false;
+  
+  while (WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+    if (millis() - startTime > 10000) { // 10 second timeout
+      Serial.println("Scan timeout");
+      break;
+    }
+    
+    // Rapid LED blinking during scan (every 100ms)
+    if (millis() - lastBlinkTime >= 100) {
+      ledState = !ledState;
+      digitalWrite(LED_PIN, ledState ? HIGH : LOW);
+      lastBlinkTime = millis();
+    }
+    
+    delay(50); // Shorter delay for more responsive blinking
+  }
+  
+  foundNetworks = WiFi.scanComplete();
+  if (foundNetworks == WIFI_SCAN_FAILED) {
+    Serial.println("Scan failed");
+    foundNetworks = 0;
+  }
+  
+  networks.clear();
+
+  for (int i = 0; i < foundNetworks; i++) {
+    NetworkInfo info;
+    info.ssid = WiFi.SSID(i);
+    info.bssid = WiFi.BSSIDstr(i);
+    info.rssi = WiFi.RSSI(i);
+    info.channel = WiFi.channel(i);
+    info.frequency = 2407 + (info.channel * 5);
+    info.encryption = translateEncryptionType(WiFi.encryptionType(i));
+    networks.push_back(info);
+  }
+
+  // Turn off LED when scan is complete
+  digitalWrite(LED_PIN, LOW);
+  
+  Serial.print("Scan complete. Found: ");
+  Serial.println(foundNetworks);
+}
+
+void showScanningAnimation() {
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_10x20_tr); // Bigger font
+  
+  // Create animated dots
+  String dots = "";
+  for (int i = 0; i < scanDots; i++) {
+    dots += ".";
+  }
+  
+  String scanningText = "Scanning" + dots;
+  
+  // Center the text
+  int textWidth = u8g2.getStrWidth(scanningText.c_str());
+  int x = (128 - textWidth) / 2;
+  int y = 32;
+  
+  u8g2.setCursor(x, y);
+  u8g2.print(scanningText);
+  u8g2.sendBuffer();
+}
+
+String translateEncryptionType(wifi_auth_mode_t type) {
+  switch (type) {
+    case WIFI_AUTH_OPEN: return "Open";
+    case WIFI_AUTH_WEP: return "WEP";
+    case WIFI_AUTH_WPA_PSK: return "WPA";
+    case WIFI_AUTH_WPA2_PSK: return "WPA2";
+    case WIFI_AUTH_WPA_WPA2_PSK: return "WPA/WPA2";
+    case WIFI_AUTH_WPA2_ENTERPRISE: return "Enterprise";
+    default: return "Unknown";
+  }
+}
+
+void showNetwork(int index) {
+  if (networks.empty()) return;
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_6x10_tr);
+
+  NetworkInfo net = networks[index];
+
+  // SSID
+  int titleY = 10;
+  int ssidX = (128 - u8g2.getStrWidth(net.ssid.c_str())) / 2;
+  u8g2.setCursor(ssidX, titleY);
+  u8g2.print(net.ssid);
+
+  // Details
+  int yStart = 20;
+  u8g2.setCursor(0, yStart);        u8g2.print("MAC: ");   u8g2.print(net.bssid);
+  u8g2.setCursor(0, yStart + 10);   u8g2.print("RSSI: ");  u8g2.print(net.rssi); u8g2.print(" dBm");
+  u8g2.setCursor(0, yStart + 20);   u8g2.print("Channel: "); u8g2.print(net.channel);
+  u8g2.setCursor(0, yStart + 30);   u8g2.print("Freq: ");  u8g2.print(net.frequency); u8g2.print(" MHz");
+  u8g2.setCursor(0, yStart + 40);   u8g2.print("Sec: ");   u8g2.print(net.encryption);
+
+  u8g2.sendBuffer();
+}
+
+void handleButton() {
+  // Check if enough time has passed since last button press
+  if (millis() - lastButtonTime < debounceDelay) return;
+
+  // Check if button is pressed (LOW because of INPUT_PULLUP)
+  if (digitalRead(BTN_CYCLE) == LOW) {
+    Serial.println("Button pressed!"); // Debug output
+    
+    // Do a fresh scan
+    scanNetworks();
+    
+    // Small delay to ensure scan completes
+    delay(100);
+    
+    // Then cycle to next network (if we have networks)
+    if (foundNetworks > 0) {
+      // White background flash
+      u8g2.clearBuffer();
+      u8g2.setDrawColor(0);
+      u8g2.drawBox(0, 0, 128, 64);
+      u8g2.sendBuffer();
+      delay(30);
+      u8g2.setDrawColor(1);
+      
+      // Cycle to next network
+      currentIndex = (currentIndex + 1) % foundNetworks;
+      Serial.print("Switching to network: "); // Debug output
+      Serial.println(currentIndex);
+      
+      showNetwork(currentIndex);
+    }
+    
+    // Update button time
+    lastButtonTime = millis();
+  }
+}

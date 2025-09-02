@@ -39,6 +39,7 @@ dependencies:
   wifi_scan: ^0.4.0+1
   network_info_plus: ^4.1.0
   wifi_iot: ^0.3.18
+  app_settings: ^5.1.1
 
 dev_dependencies:
   flutter_test:

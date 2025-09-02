@@ -22,14 +22,12 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
   bool _hasPermissions = false;
   Timer? _wifiCheckTimer;
   List<WiFiAccessPoint> _foundDevices = [];
-  final TextEditingController _passwordController = TextEditingController();
   bool _isConnecting = false;
-  bool _obscurePassword = true;
   String? _connectedDeviceSSID;
   // Target BSSID in uppercase for consistent comparison
   static const String TARGET_BSSID = 'F4:65:0B:E8:E9:91';
-  // Fallback SSID prefix in case BSSID matching fails
-  static const String FALLBACK_SSID_PREFIX = 'Dummy';
+  // WiFi password for the ESP32 device
+  static const String ESP32_PASSWORD = 'zync1234';
   DateTime? _lastScanTime;
 
   @override
@@ -69,21 +67,15 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
   }
 
   bool _isTargetDevice(WiFiAccessPoint ap) {
-    // First try BSSID match
+    // Match by BSSID (MAC address)
     final normalizedBSSID = _normalizeBSSID(ap.bssid);
     final normalizedTarget = _normalizeBSSID(TARGET_BSSID);
 
-    if (normalizedBSSID == normalizedTarget) {
-      return true;
-    }
-
-    // Fallback to SSID prefix match
-    return ap.ssid.toUpperCase().startsWith(FALLBACK_SSID_PREFIX.toUpperCase());
+    return normalizedBSSID == normalizedTarget;
   }
 
   @override
   void dispose() {
-    _passwordController.dispose();
     _scanTimer?.cancel();
     _wifiCheckTimer?.cancel();
     super.dispose();
@@ -117,6 +109,7 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
           if (!isEnabled) {
             _isScanning = false;
             _scanTimer?.cancel();
+            _foundDevices = [];
           }
         });
 
@@ -132,6 +125,7 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
         setState(() {
           _isWifiEnabled = false;
           _isScanning = false;
+          _foundDevices = [];
         });
       }
     }
@@ -260,29 +254,58 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
 
   Future<void> startScan() async {
     try {
-      if (!_hasPermissions || !_isWifiEnabled) {
-        debugPrint('Cannot start scan: permissions not granted or WiFi is off');
+      if (!_hasPermissions) {
+        debugPrint('Cannot start scan: permissions not granted');
         return;
       }
 
-      setState(() => _isScanning = true);
+      // Try to enable WiFi if it's not already enabled
+      if (!_isWifiEnabled) {
+        await _turnOnWifi();
+        // Wait a moment for WiFi to initialize
+        await Future.delayed(const Duration(seconds: 2));
+        await _checkWifiState();
+      }
+
+      if (!_isWifiEnabled) {
+        debugPrint('WiFi is still not enabled after attempting to turn it on');
+        if (mounted) {
+          setState(() {
+            _foundDevices = [];
+          });
+        }
+        return;
+      }
+
+      setState(() {
+        _isScanning = true;
+        _foundDevices = [];
+      });
 
       // Start periodic scanning
       _scanTimer?.cancel();
       _scanTimer = Timer.periodic(const Duration(seconds: 10), (_) async {
-        await _performScan();
+        await _performScan(forceFresh: true);
       });
 
-      // Start initial scan
-      await _performScan();
+      // Start initial fresh scan
+      await _performScan(forceFresh: true);
     } catch (e) {
       debugPrint('Error starting scan: $e');
       setState(() => _isScanning = false);
     }
   }
 
-  Future<void> _performScan() async {
+  Future<void> _performScan({bool forceFresh = false}) async {
     try {
+      if (!_isWifiEnabled) {
+        debugPrint('Skip scan: WiFi disabled');
+        if (mounted) {
+          setState(() => _foundDevices = []);
+        }
+        return;
+      }
+
       // Check if enough time has passed since last scan (Android throttles scans)
       final now = DateTime.now();
       if (_lastScanTime != null) {
@@ -292,28 +315,23 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
           debugPrint(
             'Skipping scan due to throttling (${difference.inSeconds}s since last scan)',
           );
-          return;
+          if (!forceFresh) return;
         }
       }
 
-      // Try to get results from the last scan first
-      var results = await WiFiScan.instance.getScannedResults();
-      debugPrint('Got ${results.length} networks from previous scan');
-
-      // Only start a new scan if we didn't get any results
-      if (results.isEmpty) {
-        final result = await WiFiScan.instance.startScan();
-        debugPrint('Started new WiFi scan, result: $result');
-
-        if (result == CanStartScan.yes) {
+      // Always start a fresh scan when requested or on first run
+      if (forceFresh) {
+        final startResult = await WiFiScan.instance.startScan();
+        debugPrint('Forcing fresh WiFi scan, result: $startResult');
+        if (startResult == CanStartScan.yes) {
           _lastScanTime = now;
-          // Wait a bit for the scan to complete
           await Future.delayed(const Duration(seconds: 2));
-          results = await WiFiScan.instance.getScannedResults();
-        } else {
-          debugPrint('Failed to start WiFi scan: $result');
         }
       }
+
+      // Get latest results after scan
+      var results = await WiFiScan.instance.getScannedResults();
+      debugPrint('Got ${results.length} networks from latest scan');
 
       // Debug print all networks
       debugPrint('==== Found ${results.length} networks ====');
@@ -359,92 +377,25 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
   }
 
   Future<void> _turnOnWifi() async {
-    // On modern Android and iOS, we can't directly turn on WiFi
-    // Instead, we'll guide the user to system settings
-    await openAppSettings();
+    try {
+      // Try to enable WiFi using the wifi_iot plugin
+      final enabled = await WiFiForIoTPlugin.setEnabled(true);
+      debugPrint('WiFi enable result: $enabled');
+
+      if (!enabled) {
+        // If direct enable fails, guide user to settings
+        await openAppSettings();
+      }
+    } catch (e) {
+      debugPrint('Error enabling WiFi: $e');
+      // Fallback to opening settings
+      await openAppSettings();
+    }
   }
 
   Future<void> _showPasswordDialog(WiFiAccessPoint device) async {
-    _passwordController.clear();
-    _obscurePassword = true;
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: Text(
-                'Connect to ${device.ssid}',
-                style: const TextStyle(
-                  fontFamily: 'Barlow',
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Enter the device password to connect:',
-                    style: TextStyle(fontFamily: 'Barlow'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      border: const OutlineInputBorder(),
-                      labelStyle: const TextStyle(fontFamily: 'Barlow'),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_off
-                              : Icons.visibility,
-                        ),
-                        onPressed: () {
-                          setDialogState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
-                      ),
-                    ),
-                    obscureText: _obscurePassword,
-                    style: const TextStyle(fontFamily: 'Barlow'),
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(false);
-                  },
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(fontFamily: 'Barlow'),
-                  ),
-                ),
-                FilledButton(
-                  onPressed: () {
-                    Navigator.of(context).pop(true);
-                  },
-                  child: const Text(
-                    'Connect',
-                    style: TextStyle(
-                      fontFamily: 'Barlow',
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-
-    if (result == true) {
-      await _connectToDevice(device, _passwordController.text);
-    }
+    // Automatically connect using the predefined password
+    await _connectToDevice(device, ESP32_PASSWORD);
   }
 
   Future<void> _connectToDevice(WiFiAccessPoint device, String password) async {
@@ -460,12 +411,13 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
       // Show connection progress
       _showConnectionProgress(device.ssid);
 
-      // Attempt to connect to the device
+      // Attempt to connect to the device (persistent, no internet expected)
       final connected = await WiFiForIoTPlugin.connect(
         device.ssid,
         password: password,
         security: NetworkSecurity.WPA,
-        joinOnce: true,
+        joinOnce: false,
+        withInternet: false,
       );
 
       if (!mounted) return;
@@ -600,7 +552,7 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'ESP32 Device Connected',
+                'ZYNC Device Connected',
                 style: TextStyle(
                   fontFamily: 'Barlow',
                   color: Colors.grey,
@@ -689,7 +641,7 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
                           ),
                           const SizedBox(height: 32),
                           Text(
-                            'Searching for ESP32 Devices...',
+                            'Searching for ZYNC Device...',
                             style: Theme.of(context)
                                 .textTheme
                                 .titleLarge
@@ -702,7 +654,7 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 32),
                             child: Text(
-                              'Make sure your ESP32 device is nearby and powered on',
+                              'Make sure your ZYNC device is nearby and powered on',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 fontFamily: 'Barlow',
@@ -717,7 +669,7 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
                                 Padding(
                                   padding: const EdgeInsets.all(16.0),
                                   child: Text(
-                                    'ESP32 Device${_foundDevices.length > 1 ? 's' : ''} Found!',
+                                    'ZYNC Device Found!',
                                     style: Theme.of(context)
                                         .textTheme
                                         .titleLarge
@@ -741,11 +693,9 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
                                                 .colorScheme
                                                 .primary,
                                           ),
-                                          title: Text(
-                                            device.ssid.isEmpty
-                                                ? 'ESP32 Device'
-                                                : device.ssid,
-                                            style: const TextStyle(
+                                          title: const Text(
+                                            'ZYNC',
+                                            style: TextStyle(
                                               fontFamily: 'Barlow',
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -814,7 +764,7 @@ class _DeviceScanningScreenState extends State<DeviceScanningScreen> {
                         const Padding(
                           padding: EdgeInsets.symmetric(horizontal: 32),
                           child: Text(
-                            'Please turn on WiFi to scan for nearby ESP32 devices',
+                            'Please turn on WiFi to scan for nearby ZYNC devices',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontFamily: 'Barlow',

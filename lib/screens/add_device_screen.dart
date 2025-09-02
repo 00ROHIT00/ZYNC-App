@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'device_scanning_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:wifi_iot/wifi_iot.dart';
 
 class AddDeviceScreen extends StatefulWidget {
   const AddDeviceScreen({super.key});
@@ -72,7 +73,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                     ),
                     const SizedBox(height: 16),
                     const Text(
-                      'ESP32 Device Connected',
+                      'ZYNC Device Connected',
                       style: TextStyle(
                         fontFamily: 'Barlow',
                         color: Colors.grey,
@@ -81,12 +82,24 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                     const SizedBox(height: 32),
                     FilledButton.icon(
                       onPressed: () async {
+                        // Attempt to disconnect from ESP32 WiFi network
+                        try {
+                          await WiFiForIoTPlugin.disconnect();
+                        } catch (_) {}
+
                         final prefs = await SharedPreferences.getInstance();
                         await prefs.remove('connected_device_ssid');
                         if (mounted) {
                           setState(() {
                             _connectedDeviceSSID = null;
                           });
+                        }
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Disconnected from ZYNC Device'),
+                            ),
+                          );
                         }
                       },
                       icon: const Icon(Icons.link_off),
@@ -126,7 +139,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 32),
                       child: Text(
-                        'Connect your ESP32 device to start syncing your data',
+                        'Connect your ZYNC device to start syncing your data',
                         textAlign: TextAlign.center,
                         style:
                             TextStyle(fontFamily: 'Barlow', color: Colors.grey),
