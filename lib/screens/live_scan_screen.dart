@@ -681,6 +681,126 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
     );
   }
 
+  // --- Risk UI helpers ---
+  Widget _buildRiskSubtitle(NetworkData n) {
+    final risk = _assessRisk(n.security);
+    final color = risk == _Risk.high
+        ? Colors.red
+        : risk == _Risk.medium
+            ? Colors.orange
+            : Colors.green;
+    final label = risk == _Risk.high
+        ? 'High risk'
+        : risk == _Risk.medium
+            ? 'Medium risk'
+            : 'Safer';
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color.withOpacity(0.4)),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                fontFamily: 'Barlow',
+                color: color,
+                fontWeight: FontWeight.w600,
+              )),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _riskReason(n.security),
+            style: const TextStyle(fontFamily: 'Barlow', color: Colors.grey),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRiskBadgeAndReason(NetworkData n) {
+    final risk = _assessRisk(n.security);
+    final color = risk == _Risk.high
+        ? Colors.red
+        : risk == _Risk.medium
+            ? Colors.orange
+            : Colors.green;
+    final label = risk == _Risk.high
+        ? 'High risk'
+        : risk == _Risk.medium
+            ? 'Medium risk'
+            : 'Safer';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: color.withOpacity(0.4)),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                fontFamily: 'Barlow',
+                color: color,
+                fontWeight: FontWeight.w600,
+              )),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _riskReason(n.security),
+            style: const TextStyle(fontFamily: 'Barlow'),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecommendation(NetworkData n) {
+    final risk = _assessRisk(n.security);
+    final text = risk == _Risk.high
+        ? 'Avoid using this network.'
+        : risk == _Risk.medium
+            ? 'Use only for casual browsing.'
+            : 'Preferred for most use.';
+    return Text(text, style: const TextStyle(fontFamily: 'Barlow'));
+  }
+
+  Widget _buildSignalNote(int rssi) {
+    final label = rssi >= -60
+        ? 'Strong'
+        : rssi >= -70
+            ? 'OK'
+            : 'Weak';
+    return Text('Signal: $label', style: const TextStyle(fontFamily: 'Barlow'));
+  }
+
+  _Risk _assessRisk(String security) {
+    final s = security.toUpperCase();
+    if (s.contains('OPEN')) return _Risk.high;
+    if (s.contains('WEP')) return _Risk.medium;
+    if (s.contains('WPA3') || s.contains('WPA2')) return _Risk.low;
+    if (s.contains('WPA')) return _Risk.medium;
+    return _Risk.medium;
+  }
+
+  String _riskReason(String security) {
+    final s = security.toUpperCase();
+    if (s.contains('OPEN')) return 'No password. Anyone can join.';
+    if (s.contains('WEP') ||
+        (s.contains('WPA') && !s.contains('WPA2') && !s.contains('WPA3')))
+      return 'Old security. Easier to break.';
+    if (s.contains('WPA2') || s.contains('WPA3'))
+      return 'Strong security. Harder to break.';
+    return 'Security unknown.';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -880,21 +1000,33 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          subtitle: Text(
-                            '${network.security} • ${network.rssi} dBm',
-                            style: const TextStyle(fontFamily: 'Barlow'),
-                          ),
+                          subtitle: _buildRiskSubtitle(network),
                           children: [
                             Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _detailRow('MAC Address:', network.mac),
-                                  _detailRow('Channel:', '${network.channel}'),
-                                  _detailRow('Security:', network.security),
-                                  _detailRow('Signal Strength:',
-                                      '${network.rssi} dBm'),
+                                  _buildRiskBadgeAndReason(network),
+                                  const SizedBox(height: 8),
+                                  _buildRecommendation(network),
+                                  const SizedBox(height: 12),
+                                  _buildSignalNote(network.rssi),
+                                  const SizedBox(height: 12),
+                                  ExpansionTile(
+                                    title: const Text('More details',
+                                        style: TextStyle(fontFamily: 'Barlow')),
+                                    childrenPadding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    children: [
+                                      _detailRow('Security:', network.security),
+                                      _detailRow('MAC Address:', network.mac),
+                                      _detailRow(
+                                          'Channel:', '${network.channel}'),
+                                      _detailRow(
+                                          'Signal:', '${network.rssi} dBm'),
+                                    ],
+                                  ),
                                   const SizedBox(height: 12),
                                   Align(
                                     alignment: Alignment.centerRight,
@@ -993,6 +1125,8 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
     );
   }
 }
+
+enum _Risk { high, medium, low }
 
 class NetworkData {
   final String ssid;
