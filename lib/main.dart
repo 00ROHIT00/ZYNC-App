@@ -10,6 +10,8 @@ import 'screens/add_device_screen.dart';
 import 'screens/live_scan_screen.dart';
 import 'screens/scan_logs_screen.dart';
 import 'services/connection_service.dart';
+import 'services/network_stats.dart';
+import 'widgets/network_stats_chart.dart';
 
 // Global theme state
 ThemeMode currentThemeMode = ThemeMode.system;
@@ -1468,9 +1470,15 @@ We reserve the right to update these Terms at any time. Continued use of the app
           ),
           body: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: Column(
                 children: [
+                  SizedBox(
+                    height: 280,
+                    child: const NetworkStatsDashboard(),
+                  ),
+                  const SizedBox(height: 16),
                   Expanded(
                     child: Row(
                       children: [
@@ -1734,7 +1742,7 @@ We reserve the right to update these Terms at any time. Continued use of the app
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(16.0),
         decoration: BoxDecoration(
           color: theme.scaffoldBackgroundColor,
           borderRadius: BorderRadius.circular(16.0),
@@ -1742,6 +1750,41 @@ We reserve the right to update these Terms at any time. Continued use of the app
         ),
         child: child,
       ),
+    );
+  }
+}
+
+class NetworkStatsDashboard extends StatefulWidget {
+  const NetworkStatsDashboard({super.key});
+
+  @override
+  State<NetworkStatsDashboard> createState() => _NetworkStatsDashboardState();
+}
+
+class _NetworkStatsDashboardState extends State<NetworkStatsDashboard> {
+  Map<String, int> _stats = {'total': 0, 'secure': 0, 'vulnerable': 0};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    final stats = await NetworkStats.getNetworkStats();
+    if (mounted) {
+      setState(() {
+        _stats = stats;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return NetworkStatsChart(
+      totalNetworks: _stats['total'] ?? 0,
+      secureNetworks: _stats['secure'] ?? 0,
+      vulnerableNetworks: _stats['vulnerable'] ?? 0,
     );
   }
 }
