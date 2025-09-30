@@ -274,6 +274,9 @@ void handleTCPConnection() {
     } else if (command == "STOP_LIVE_SCAN") {
       Serial.println("[DEBUG] STOP_LIVE_SCAN command received.");
       stopLiveScan();
+    } else if (command == "GET_BATTERY") {
+      Serial.println("[DEBUG] GET_BATTERY command received.");
+      sendBatteryStatus();
     } else {
       Serial.print("[DEBUG] Unknown command received: ");
       Serial.println(command);
@@ -323,6 +326,20 @@ void stopLiveScan() {
   if (foundNetworks > 0) {
     showNetwork(currentIndex);
   }
+}
+
+void sendBatteryStatus() {
+  int batteryPercent = getBatteryPercentage();
+  bool charging = isCharging();
+  
+  // Send battery status: "BATTERY:percentage:charging"
+  String response = "BATTERY:" + String(batteryPercent) + ":" + String(charging ? "1" : "0");
+  client.println(response);
+  
+  Serial.print("Sent battery status: ");
+  Serial.print(batteryPercent);
+  Serial.print("% ");
+  Serial.println(charging ? "(Charging)" : "(Not charging)");
 }
 
 void performLiveScan() {

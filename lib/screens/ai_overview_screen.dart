@@ -130,20 +130,39 @@ class _AIOverviewScreenState extends State<AIOverviewScreen> {
       );
 
       final prompt = '''
-Analyze this WiFi network and provide a security assessment:
+Analyze this WiFi network for security vulnerabilities and provide a comprehensive assessment:
 
 Network Name (SSID): ${network.ssid}
 Security Type: ${network.security}
 Signal Strength: ${network.rssi} dBm (${_getSignalQuality(network.rssi)})
 Channel/Frequency: ${network.channel} MHz
 
-Please provide:
-1. Security Level (Secure/Vulnerable/Critical)
-2. Security Concerns (if any)
-3. What this network could be used for
-4. Recommendations for the user
+Please analyze and provide:
 
-Keep the response concise and user-friendly (max 200 words).
+1. SECURITY LEVEL: Rate as Secure/Vulnerable/Critical
+
+2. VULNERABILITY DETECTION:
+   - Check for Evil Twin Attack indicators (suspicious duplicate SSIDs, weak signal from known network)
+   - Rogue Access Point signs (unusual SSID patterns, unexpected open networks)
+   - Man-in-the-Middle risks
+   - Weak encryption vulnerabilities (WEP, old WPA)
+   - Any other security threats
+
+3. SPECIFIC VULNERABILITIES FOUND:
+   - Name each vulnerability detected
+   - Explain what it is in simple terms
+   - How attackers could exploit it
+
+4. HOW TO AVOID/PROTECT:
+   - Specific steps to stay safe
+   - What NOT to do on this network
+   - Alternative safer options
+
+5. RECOMMENDATIONS:
+   - Should the user connect? (Yes/No/Only with VPN)
+   - What activities are safe/unsafe
+
+Keep response clear and user-friendly (max 250 words). Focus on practical security advice for non-technical users.
 ''';
 
       final content = [Content.text(prompt)];
@@ -181,22 +200,80 @@ Keep the response concise and user-friendly (max 200 words).
     
     String analysis = '';
     
-    // Security assessment
+    // Security assessment with vulnerability details
     if (risk == 'Critical') {
-      analysis += '🔴 CRITICAL RISK: This is an open network with no encryption. Anyone can intercept your data.\n\n';
-      analysis += 'Security Concerns:\n• No password protection\n• All traffic visible to others\n• Easy target for hackers\n\n';
-      analysis += 'Recommendation: AVOID this network. Never use for sensitive activities.';
+      analysis += '🔴 CRITICAL RISK: Open Network\n\n';
+      analysis += 'VULNERABILITIES DETECTED:\n\n';
+      analysis += '1. No Encryption\n';
+      analysis += 'What it is: Network has no password, anyone can join.\n';
+      analysis += 'Risk: All your data (passwords, messages, browsing) is visible to anyone nearby.\n\n';
+      
+      analysis += '2. Man-in-the-Middle Attack Risk\n';
+      analysis += 'What it is: Attackers can intercept communication between you and websites.\n';
+      analysis += 'Risk: Hackers can steal login credentials, credit card info, personal data.\n\n';
+      
+      analysis += '3. Evil Twin Potential\n';
+      analysis += 'What it is: Could be a fake network set up by attackers.\n';
+      analysis += 'Risk: Designed to steal your information.\n\n';
+      
+      analysis += 'HOW TO PROTECT:\n';
+      analysis += '• DO NOT connect to this network\n';
+      analysis += '• Never enter passwords on open networks\n';
+      analysis += '• Use mobile data instead\n';
+      analysis += '• If you must connect, use a VPN\n\n';
+      
+      analysis += 'RECOMMENDATION: ❌ AVOID - Find a secure network instead.';
     } else if (risk == 'Vulnerable') {
-      analysis += '🟠 VULNERABLE: This network uses outdated security (WEP or old WPA).\n\n';
-      analysis += 'Security Concerns:\n• Weak encryption\n• Can be cracked with tools\n• Not recommended for important data\n\n';
-      analysis += 'Recommendation: Use only if necessary, preferably with a VPN.';
+      analysis += '🟠 VULNERABLE: Weak Encryption\n\n';
+      analysis += 'VULNERABILITIES DETECTED:\n\n';
+      
+      analysis += '1. Outdated Security (WEP/WPA)\n';
+      analysis += 'What it is: Old encryption that can be cracked in minutes.\n';
+      analysis += 'Risk: Hackers can break in and see your traffic.\n\n';
+      
+      analysis += '2. Packet Sniffing Risk\n';
+      analysis += 'What it is: Attackers can capture and read your data packets.\n';
+      analysis += 'Risk: Passwords and sensitive info can be stolen.\n\n';
+      
+      analysis += 'HOW TO PROTECT:\n';
+      analysis += '• Use a VPN if you must connect\n';
+      analysis += '• Avoid banking or shopping\n';
+      analysis += '• Don\'t enter passwords\n';
+      analysis += '• Use HTTPS websites only\n\n';
+      
+      analysis += 'RECOMMENDATION: ⚠️ USE WITH CAUTION - Only for basic browsing with VPN.';
     } else if (risk == 'Secure') {
-      analysis += '🟢 SECURE: This network uses modern encryption (WPA2/WPA3).\n\n';
-      analysis += 'Security Features:\n• Strong encryption\n• Protected against common attacks\n• Safe for general use\n\n';
-      analysis += 'Recommendation: Safe to use for most activities. Signal is $signal.';
+      analysis += '🟢 SECURE: Modern Encryption\n\n';
+      analysis += 'SECURITY FEATURES:\n\n';
+      
+      analysis += '1. Strong Encryption (WPA2/WPA3)\n';
+      analysis += 'What it is: Modern security that\'s hard to crack.\n';
+      analysis += 'Protection: Your data is encrypted and safe from eavesdropping.\n\n';
+      
+      analysis += '2. Authentication Required\n';
+      analysis += 'What it is: Password needed to connect.\n';
+      analysis += 'Protection: Prevents unauthorized access.\n\n';
+      
+      analysis += 'STILL BE CAREFUL:\n';
+      analysis += '• Verify you\'re connecting to the real network (not Evil Twin)\n';
+      analysis += '• Check the network name matches exactly\n';
+      analysis += '• Use HTTPS websites when possible\n';
+      analysis += '• Keep device security updated\n\n';
+      
+      analysis += 'RECOMMENDATION: ✅ SAFE TO USE - Good for most activities. Signal: $signal.';
     } else {
-      analysis += '⚪ UNKNOWN: Security type could not be determined.\n\n';
-      analysis += 'Recommendation: Proceed with caution. Verify network security before connecting.';
+      analysis += '⚪ UNKNOWN: Cannot Determine Security\n\n';
+      analysis += 'POTENTIAL RISKS:\n';
+      analysis += '• Security type unclear\n';
+      analysis += '• Could be misconfigured\n';
+      analysis += '• May have hidden vulnerabilities\n\n';
+      
+      analysis += 'HOW TO PROTECT:\n';
+      analysis += '• Verify network details before connecting\n';
+      analysis += '• Ask network owner about security\n';
+      analysis += '• Use VPN if you connect\n\n';
+      
+      analysis += 'RECOMMENDATION: ⚠️ PROCEED WITH CAUTION - Verify security first.';
     }
     
     return analysis;

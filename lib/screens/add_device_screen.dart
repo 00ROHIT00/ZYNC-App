@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:network_info_plus/network_info_plus.dart';
 import 'package:app_settings/app_settings.dart';
+import 'dart:io';
 
 class AddDeviceScreen extends StatefulWidget {
   const AddDeviceScreen({super.key});
@@ -15,11 +16,58 @@ class AddDeviceScreen extends StatefulWidget {
 class _AddDeviceScreenState extends State<AddDeviceScreen> {
   String? _connectedDeviceSSID;
   bool _isLoading = true;
+  int _batteryPercentage = 0;
+  bool _isCharging = false;
+  bool _fetchingBattery = false;
 
   @override
   void initState() {
     super.initState();
     _checkConnectedDevice();
+  }
+
+  Future<void> _fetchBatteryStatus() async {
+    if (_connectedDeviceSSID == null) return;
+    
+    setState(() {
+      _fetchingBattery = true;
+    });
+
+    try {
+      // Connect to ESP32 TCP server to get battery status
+      final socket = await Socket.connect('192.168.4.1', 8888, timeout: const Duration(seconds: 5));
+      
+      // Send battery status request
+      socket.write('GET_BATTERY\n');
+      await socket.flush();
+      
+      // Wait for response
+      final response = await socket.timeout(const Duration(seconds: 3)).first;
+      final data = String.fromCharCodes(response).trim();
+      
+      // Parse response: "BATTERY:85:0" (percentage:charging)
+      if (data.startsWith('BATTERY:')) {
+        final parts = data.substring(8).split(':');
+        if (parts.length >= 2) {
+          setState(() {
+            _batteryPercentage = int.tryParse(parts[0]) ?? 0;
+            _isCharging = parts[1] == '1';
+          });
+        }
+      }
+      
+      socket.close();
+    } catch (e) {
+      // If battery fetch fails, show default values
+      setState(() {
+        _batteryPercentage = 0;
+        _isCharging = false;
+      });
+    } finally {
+      setState(() {
+        _fetchingBattery = false;
+      });
+    }
   }
 
   Future<void> _checkConnectedDevice() async {
@@ -62,6 +110,11 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
         _connectedDeviceSSID = connectedSSID;
         _isLoading = false;
       });
+      
+      // Fetch battery status if connected
+      if (connectedSSID != null) {
+        _fetchBatteryStatus();
+      }
     }
   }
 
@@ -113,7 +166,41 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                         color: Colors.grey,
                       ),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
+                    
+                    // Battery Status (compact)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Battery Icon (smaller)
+                          _buildBatteryIcon(_batteryPercentage, _isCharging),
+                          const SizedBox(width: 8),
+                          // Battery Percentage
+                          Text(
+                            _fetchingBattery ? 'Checking...' : '$_batteryPercentage%',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontFamily: 'Barlow',
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (_isCharging) ...[
+                            const SizedBox(width: 4),
+                            Icon(
+                              Icons.bolt,
+                              size: 14,
+                              color: Colors.amber,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
                     FilledButton.icon(
                       onPressed: () async {
                         // Attempt to disconnect from ESP32 WiFi network
@@ -259,6 +346,37 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  Widget _buildBatteryIcon(int percentage, bool charging) {
+    IconData icon;
+    Color color;
+
+    if (charging) {
+      icon = Icons.battery_charging_full;
+      color = Colors.green;
+    } else if (percentage > 80) {
+      icon = Icons.battery_full;
+      color = Colors.green;
+    } else if (percentage > 50) {
+      icon = Icons.battery_5_bar;
+      color = Colors.lightGreen;
+    } else if (percentage > 30) {
+      icon = Icons.battery_3_bar;
+      color = Colors.orange;
+    } else if (percentage > 10) {
+      icon = Icons.battery_2_bar;
+      color = Colors.deepOrange;
+    } else {
+      icon = Icons.battery_1_bar;
+      color = Colors.red;
+    }
+
+    return Icon(
+      icon,
+      size: 20,  // Smaller icon
+      color: color,
     );
   }
 }
