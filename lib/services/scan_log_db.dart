@@ -15,7 +15,7 @@ class ScanLogDb {
     final path = p.join(dbPath, 'scan_logs.db');
     _db = await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE scan_entries (
@@ -29,13 +29,50 @@ class ScanLogDb {
             lastSeenAt INTEGER NOT NULL,
             seenCount INTEGER NOT NULL DEFAULT 1,
             risk TEXT NOT NULL,
-            source TEXT
+            source TEXT,
+            sessionId TEXT
           );
         ''');
         await db.execute('CREATE INDEX idx_scan_bssid ON scan_entries(bssid);');
         await db.execute('CREATE INDEX idx_scan_ssid ON scan_entries(ssid);');
         await db.execute(
             'CREATE INDEX idx_scan_lastSeen ON scan_entries(lastSeenAt);');
+        await db.execute(
+            'CREATE INDEX idx_scan_sessionId ON scan_entries(sessionId);');
+        
+        // Create scan sessions table
+        await db.execute('''
+          CREATE TABLE scan_sessions (
+            id TEXT PRIMARY KEY,
+            timestamp INTEGER NOT NULL,
+            totalNetworks INTEGER NOT NULL,
+            secureNetworks INTEGER NOT NULL,
+            vulnerableNetworks INTEGER NOT NULL
+          );
+        ''');
+        await db.execute(
+            'CREATE INDEX idx_session_timestamp ON scan_sessions(timestamp);');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // Add sessionId column to existing table
+          await db.execute('ALTER TABLE scan_entries ADD COLUMN sessionId TEXT;');
+          await db.execute(
+              'CREATE INDEX idx_scan_sessionId ON scan_entries(sessionId);');
+          
+          // Create scan sessions table
+          await db.execute('''
+            CREATE TABLE scan_sessions (
+              id TEXT PRIMARY KEY,
+              timestamp INTEGER NOT NULL,
+              totalNetworks INTEGER NOT NULL,
+              secureNetworks INTEGER NOT NULL,
+              vulnerableNetworks INTEGER NOT NULL
+            );
+          ''');
+          await db.execute(
+              'CREATE INDEX idx_session_timestamp ON scan_sessions(timestamp);');
+        }
       },
     );
     return _db!;
@@ -139,5 +176,47 @@ class ScanLogDb {
   Future<void> clearAll() async {
     final db = await _open();
     await db.delete('scan_entries');
+    await db.delete('scan_sessions');
+  }
+
+  // Save a scan session with its statistics
+  Future<void> saveScanSession({
+    required String sessionId,
+    required int timestamp,
+    required int totalNetworks,
+    required int secureNetworks,
+    required int vulnerableNetworks,
+  }) async {
+    final db = await _open();
+    await db.insert(
+      'scan_sessions',
+      {
+        'id': sessionId,
+        'timestamp': timestamp,
+        'totalNetworks': totalNetworks,
+        'secureNetworks': secureNetworks,
+        'vulnerableNetworks': vulnerableNetworks,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  // Get the most recent scan session statistics
+  Future<Map<String, int>?> getLatestScanSession() async {
+    final db = await _open();
+    final results = await db.query(
+      'scan_sessions',
+      orderBy: 'timestamp DESC',
+      limit: 1,
+    );
+    
+    if (results.isEmpty) return null;
+    
+    final session = results.first;
+    return {
+      'total': session['totalNetworks'] as int,
+      'secure': session['secureNetworks'] as int,
+      'vulnerable': session['vulnerableNetworks'] as int,
+    };
   }
 }

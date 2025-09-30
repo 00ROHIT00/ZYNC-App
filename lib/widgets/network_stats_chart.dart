@@ -5,12 +5,18 @@ class NetworkStatsChart extends StatelessWidget {
   final int totalNetworks;
   final int vulnerableNetworks;
   final int secureNetworks;
+  final bool hasData;
+  final bool isConnected;
+  final bool hasScanData;
 
   const NetworkStatsChart({
     super.key,
     required this.totalNetworks,
     required this.vulnerableNetworks,
     required this.secureNetworks,
+    this.hasData = true,
+    this.isConnected = false,
+    this.hasScanData = false,
   });
 
   @override
@@ -36,65 +42,105 @@ class NetworkStatsChart extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 40,
-                sections: [
-                  PieChartSectionData(
-                    color: Colors.green,
-                    value: secureNetworks.toDouble(),
-                    title: 'Secure\n${secureNetworks}',
-                    radius: 55,
-                    titleStyle: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    titlePositionPercentageOffset: 0.85,
-                  ),
-                  PieChartSectionData(
-                    color: Colors.red,
-                    value: vulnerableNetworks.toDouble(),
-                    title: 'Vulnerable\n${vulnerableNetworks}',
-                    radius: 55,
-                    titleStyle: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    titlePositionPercentageOffset: 0.85,
-                  ),
-                  PieChartSectionData(
-                    color: Colors.blue,
-                    value:
-                        (totalNetworks - (secureNetworks + vulnerableNetworks))
-                            .toDouble(),
-                    title:
-                        'Others\n${totalNetworks - (secureNetworks + vulnerableNetworks)}',
-                    radius: 55,
-                    titleStyle: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                    titlePositionPercentageOffset: 0.85,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            child: Stack(
               children: [
-                _buildLegendItem('Secure', Colors.green),
-                _buildLegendItem('Vulnerable', Colors.red),
-                _buildLegendItem('Others', Colors.blue),
+                // Chart
+                if (hasData && totalNetworks > 0)
+                  PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 40,
+                      sections: [
+                        PieChartSectionData(
+                          color: Colors.green,
+                          value: secureNetworks > 0 ? secureNetworks.toDouble() : 0.1,
+                          title: secureNetworks > 0 ? 'Secure\n$secureNetworks' : '',
+                          radius: 55,
+                          titleStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          titlePositionPercentageOffset: 0.85,
+                        ),
+                        PieChartSectionData(
+                          color: Colors.red,
+                          value: vulnerableNetworks > 0 ? vulnerableNetworks.toDouble() : 0.1,
+                          title: vulnerableNetworks > 0 ? 'Vulnerable\n$vulnerableNetworks' : '',
+                          radius: 55,
+                          titleStyle: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          titlePositionPercentageOffset: 0.85,
+                        ),
+                      ],
+                    ),
+                  ),
+                // Overlay for no data states
+                if (!hasData || totalNetworks == 0)
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            !isConnected ? Icons.wifi_off : Icons.radar,
+                            size: 48,
+                            color: Theme.of(context).colorScheme.primary.withOpacity(0.6),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            !isConnected 
+                              ? 'Connect ZYNC to view stats'
+                              : 'Perform a live scan to view stats',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.onSurface,
+                              fontFamily: 'Barlow',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
+          // Legend and Total Networks
+          if (hasData && totalNetworks > 0) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 8),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildLegendItem('Secure', Colors.green),
+                  _buildLegendItem('Vulnerable', Colors.red),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Total Networks: $totalNetworks',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+                fontFamily: 'Barlow',
+              ),
+            ),
+          ],
         ],
       ),
     );

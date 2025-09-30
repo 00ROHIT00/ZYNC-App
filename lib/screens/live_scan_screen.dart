@@ -52,9 +52,24 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
           _isPhoneScanning = false;
         });
       }
-      // Persist scan results to logs
+      // Persist scan results to logs and save session stats
       try {
         final now = DateTime.now().millisecondsSinceEpoch;
+        final sessionId = 'session_$now';
+        
+        // Calculate statistics (Low risk = Secure, Medium/High = Vulnerable)
+        int secureCount = 0;
+        int vulnerableCount = 0;
+        
+        for (final n in results) {
+          final risk = _assessRisk(n.security);
+          if (risk == _Risk.low) {
+            secureCount++;
+          } else {
+            vulnerableCount++;
+          }
+        }
+        
         final payload = results
             .map((n) => {
                   'ssid': n.ssid,
@@ -63,11 +78,21 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
                   'channel': n.channel,
                   'rssi': n.rssi,
                   'now': now,
-                  'risk': _assessRisk(n.security).name,
+                  'risk': _getRiskString(_assessRisk(n.security)),
                   'source': 'live_scan',
+                  'sessionId': sessionId,
                 })
             .toList();
         await ScanLogDb().upsertNetworks(payload);
+        
+        // Save session statistics
+        await ScanLogDb().saveScanSession(
+          sessionId: sessionId,
+          timestamp: now,
+          totalNetworks: results.length,
+          secureNetworks: secureCount,
+          vulnerableNetworks: vulnerableCount,
+        );
       } catch (_) {}
     } catch (e) {
       final elapsed = DateTime.now().difference(start).inMilliseconds;
@@ -806,6 +831,17 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
     if (s.contains('WPA3') || s.contains('WPA2')) return _Risk.low;
     if (s.contains('WPA')) return _Risk.medium;
     return _Risk.medium;
+  }
+
+  String _getRiskString(_Risk risk) {
+    switch (risk) {
+      case _Risk.high:
+        return 'High';
+      case _Risk.medium:
+        return 'Medium';
+      case _Risk.low:
+        return 'Low';
+    }
   }
 
   String _riskReason(String security) {

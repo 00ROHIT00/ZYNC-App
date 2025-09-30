@@ -1012,6 +1012,7 @@ class _DashboardScreenState extends State<DashboardScreen>
   late AnimationController _animationController;
   bool _isHovering = false;
   DateTime? _lastBackPressTime;
+  Key _statsKey = UniqueKey();
 
   void _showToast(BuildContext context, String message) {
     final overlay = Overlay.of(context);
@@ -1388,14 +1389,18 @@ We reserve the right to update these Terms at any time. Continued use of the app
                       'Live Scan',
                       style: TextStyle(color: textColor, fontFamily: 'Barlow'),
                     ),
-                    onTap: () {
+                    onTap: () async {
                       Navigator.of(context).pop(); // Close drawer
-                      Navigator.push(
+                      await Navigator.push(
                         context,
                         CupertinoPageRoute(
                           builder: (context) => const LiveScanScreen(),
                         ),
                       );
+                      // Refresh stats when returning from live scan
+                      setState(() {
+                        _statsKey = UniqueKey();
+                      });
                     },
                   ),
                   ListTile(
@@ -1476,7 +1481,7 @@ We reserve the right to update these Terms at any time. Continued use of the app
                 children: [
                   SizedBox(
                     height: 280,
-                    child: const NetworkStatsDashboard(),
+                    child: NetworkStatsDashboard(key: _statsKey),
                   ),
                   const SizedBox(height: 16),
                   Expanded(
@@ -1525,13 +1530,17 @@ We reserve the right to update these Terms at any time. Continued use of the app
                         Expanded(
                           child: _buildDashboardButton(
                             context,
-                            onTap: () {
-                              Navigator.push(
+                            onTap: () async {
+                              await Navigator.push(
                                 context,
                                 CupertinoPageRoute(
                                   builder: (context) => const LiveScanScreen(),
                                 ),
                               );
+                              // Refresh stats when returning from live scan
+                              setState(() {
+                                _statsKey = UniqueKey();
+                              });
                             },
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -1763,11 +1772,40 @@ class NetworkStatsDashboard extends StatefulWidget {
 
 class _NetworkStatsDashboardState extends State<NetworkStatsDashboard> {
   Map<String, int> _stats = {'total': 0, 'secure': 0, 'vulnerable': 0};
+  bool _isConnected = false;
+  bool _hasData = false;
 
   @override
   void initState() {
     super.initState();
     _loadStats();
+    _checkConnection();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload stats when returning to this screen
+    _loadStats();
+    _checkConnection();
+  }
+
+  Future<void> _checkConnection() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final connectedSSID = prefs.getString('connected_device_ssid');
+      if (mounted) {
+        setState(() {
+          _isConnected = connectedSSID != null && connectedSSID.isNotEmpty;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+        });
+      }
+    }
   }
 
   Future<void> _loadStats() async {
@@ -1775,6 +1813,7 @@ class _NetworkStatsDashboardState extends State<NetworkStatsDashboard> {
     if (mounted) {
       setState(() {
         _stats = stats;
+        _hasData = (stats['total'] ?? 0) > 0;
       });
     }
   }
@@ -1785,6 +1824,9 @@ class _NetworkStatsDashboardState extends State<NetworkStatsDashboard> {
       totalNetworks: _stats['total'] ?? 0,
       secureNetworks: _stats['secure'] ?? 0,
       vulnerableNetworks: _stats['vulnerable'] ?? 0,
+      hasData: _hasData,
+      isConnected: _isConnected,
+      hasScanData: _hasData,
     );
   }
 }
