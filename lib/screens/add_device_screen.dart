@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'device_scanning_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wifi_iot/wifi_iot.dart';
+import 'package:network_info_plus/network_info_plus.dart';
+import 'package:app_settings/app_settings.dart';
 
 class AddDeviceScreen extends StatefulWidget {
   const AddDeviceScreen({super.key});
@@ -23,6 +25,38 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
   Future<void> _checkConnectedDevice() async {
     final prefs = await SharedPreferences.getInstance();
     final connectedSSID = prefs.getString('connected_device_ssid');
+    
+    // Verify if actually connected to the WiFi network
+    if (connectedSSID != null) {
+      try {
+        final info = NetworkInfo();
+        final currentSSID = await info.getWifiName();
+        final cleanSSID = currentSSID?.replaceAll('"', '');
+        
+        // If not actually connected to the saved device, clear the state
+        if (cleanSSID != connectedSSID) {
+          await prefs.remove('connected_device_ssid');
+          if (mounted) {
+            setState(() {
+              _connectedDeviceSSID = null;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      } catch (e) {
+        // If error checking connection, clear the state
+        await prefs.remove('connected_device_ssid');
+        if (mounted) {
+          setState(() {
+            _connectedDeviceSSID = null;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+    }
+    
     if (mounted) {
       setState(() {
         _connectedDeviceSSID = connectedSSID;
@@ -148,15 +182,68 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                     const SizedBox(height: 48),
                     FilledButton.icon(
                       onPressed: () async {
-                        final result = await Navigator.push<bool>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const DeviceScanningScreen(),
-                          ),
-                        );
-                        if (result == true) {
-                          // Refresh the connected device status
-                          _checkConnectedDevice();
+                        // Check if WiFi is enabled before scanning
+                        bool wifiEnabled = false;
+                        try {
+                          wifiEnabled = await WiFiForIoTPlugin.isEnabled();
+                        } catch (e) {
+                          wifiEnabled = false;
+                        }
+                        
+                        if (!wifiEnabled) {
+                          // Show dialog to enable WiFi
+                          if (mounted) {
+                            final shouldEnable = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('WiFi is Off'),
+                                content: const Text(
+                                  'WiFi needs to be enabled to scan for ZYNC devices. Please enable WiFi in your device settings.',
+                                  style: TextStyle(fontFamily: 'Barlow'),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text('Open Settings'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            
+                            if (shouldEnable == true) {
+                              // Open WiFi settings
+                              await AppSettings.openAppSettings(type: AppSettingsType.wifi);
+                              
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please enable WiFi and return to the app to scan.'),
+                                    duration: Duration(seconds: 3),
+                                  ),
+                                );
+                              }
+                              return;
+                            } else {
+                              return;
+                            }
+                          }
+                        }
+                        
+                        if (mounted) {
+                          final result = await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DeviceScanningScreen(),
+                            ),
+                          );
+                          if (result == true) {
+                            // Refresh the connected device status
+                            _checkConnectedDevice();
+                          }
                         }
                       },
                       icon: const Icon(Icons.search),

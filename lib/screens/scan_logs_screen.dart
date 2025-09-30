@@ -3,6 +3,7 @@ import '../services/scan_log_db.dart';
 
 import 'package:csv/csv.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import 'dart:typed_data';
@@ -46,102 +47,161 @@ class _ScanLogsScreenState extends State<ScanLogsScreen> {
     }
 
     if (format == 'csv') {
-      // Prepare CSV data
+      // Prepare CSV data with better formatting
       List<List<dynamic>> csvData = [
         [
-          'SSID',
-          'MAC',
+          'Network Name (SSID)',
+          'MAC Address (BSSID)',
+          'Security Type',
+          'Risk Level',
+          'Signal Strength (dBm)',
           'Channel',
-          'Signal',
-          'Seen',
+          'Times Seen',
           'First Seen',
-          'Last Seen',
-          'Risk',
-          'Security'
+          'Last Seen'
         ],
         ..._rows.map((r) => [
-              r['ssid'] ?? '<Hidden Network>',
-              r['bssid'] ?? '',
-              r['channel'] ?? '',
-              r['rssi'] ?? '',
-              r['seenCount'] ?? '',
+              r['ssid']?.toString().isNotEmpty == true ? r['ssid'] : 'Hidden Network',
+              r['bssid'] ?? 'N/A',
+              r['security'] ?? 'Unknown',
+              r['risk'] ?? 'Unknown',
+              r['rssi'] != null ? '${r['rssi']} dBm' : 'N/A',
+              r['channel'] ?? 'N/A',
+              r['seenCount'] ?? '1',
               r['firstSeenAt'] != null
                   ? DateTime.fromMillisecondsSinceEpoch(r['firstSeenAt'])
-                      .toString()
-                  : '',
+                      .toString().split('.')[0] // Remove microseconds
+                  : 'N/A',
               r['lastSeenAt'] != null
                   ? DateTime.fromMillisecondsSinceEpoch(r['lastSeenAt'])
-                      .toString()
-                  : '',
-              r['risk'] ?? '',
-              r['security'] ?? '',
+                      .toString().split('.')[0] // Remove microseconds
+                  : 'N/A',
             ])
       ];
       String csv = const ListToCsvConverter().convert(csvData);
       await Printing.sharePdf(
-          bytes: Uint8List.fromList(csv.codeUnits), filename: 'scan_logs.csv');
+          bytes: Uint8List.fromList(csv.codeUnits), filename: 'zync_scan_logs.csv');
     } else if (format == 'pdf') {
-      // Prepare PDF document
+      // Prepare PDF document with better layout
       final pdf = pw.Document();
-      pdf.addPage(
-        pw.Page(
-          build: (pw.Context context) {
-            return pw.Column(
-              crossAxisAlignment: pw.CrossAxisAlignment.start,
-              children: [
-                pw.Text('Scan Logs',
-                    style: pw.TextStyle(
-                        fontSize: 24, fontWeight: pw.FontWeight.bold)),
-                pw.SizedBox(height: 16),
-                pw.Table(
-                  border: pw.TableBorder.all(),
-                  children: [
-                    pw.TableRow(
+      
+      // Split data into chunks for multiple pages if needed
+      const int rowsPerPage = 15;
+      for (int i = 0; i < _rows.length; i += rowsPerPage) {
+        final chunk = _rows.skip(i).take(rowsPerPage).toList();
+        
+        pdf.addPage(
+          pw.MultiPage(
+            pageFormat: PdfPageFormat.a4.landscape, // Landscape for better table fit
+            margin: const pw.EdgeInsets.all(32),
+            build: (pw.Context context) {
+              return [
+                // Header (only on first page)
+                if (i == 0) ...[
+                  pw.Header(
+                    level: 0,
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text('SSID'),
-                        pw.Text('MAC'),
-                        pw.Text('Channel'),
-                        pw.Text('Signal'),
-                        pw.Text('Seen'),
-                        pw.Text('First Seen'),
-                        pw.Text('Last Seen'),
-                        pw.Text('Risk'),
-                        pw.Text('Security'),
+                        pw.Text(
+                          'ZYNC WiFi Scan Logs',
+                          style: pw.TextStyle(
+                            fontSize: 24,
+                            fontWeight: pw.FontWeight.bold,
+                          ),
+                        ),
+                        pw.Text(
+                          'Generated: ${DateTime.now().toString().split('.')[0]}',
+                          style: const pw.TextStyle(fontSize: 10),
+                        ),
                       ],
                     ),
-                    ..._rows
-                        .map((r) => pw.TableRow(
-                              children: [
-                                pw.Text(r['ssid'] ?? '<Hidden Network>'),
-                                pw.Text(r['bssid'] ?? ''),
-                                pw.Text('${r['channel'] ?? ''}'),
-                                pw.Text('${r['rssi'] ?? ''}'),
-                                pw.Text('${r['seenCount'] ?? ''}'),
-                                pw.Text(r['firstSeenAt'] != null
-                                    ? DateTime.fromMillisecondsSinceEpoch(
-                                            r['firstSeenAt'])
-                                        .toString()
-                                    : ''),
-                                pw.Text(r['lastSeenAt'] != null
-                                    ? DateTime.fromMillisecondsSinceEpoch(
-                                            r['lastSeenAt'])
-                                        .toString()
-                                    : ''),
-                                pw.Text(r['risk'] ?? ''),
-                                pw.Text(r['security'] ?? ''),
-                              ],
-                            ))
-                        .toList(),
+                  ),
+                  pw.SizedBox(height: 20),
+                  pw.Text(
+                    'Total Networks: ${_rows.length}',
+                    style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 16),
+                ],
+                
+                // Table
+                pw.Table(
+                  border: pw.TableBorder.all(color: PdfColors.grey400),
+                  columnWidths: {
+                    0: const pw.FlexColumnWidth(2), // SSID
+                    1: const pw.FlexColumnWidth(2), // MAC
+                    2: const pw.FlexColumnWidth(2), // Security
+                    3: const pw.FlexColumnWidth(1), // Risk
+                    4: const pw.FlexColumnWidth(1), // Signal
+                    5: const pw.FlexColumnWidth(1), // Channel
+                    6: const pw.FlexColumnWidth(2), // Last Seen
+                  },
+                  children: [
+                    // Header row
+                    pw.TableRow(
+                      decoration: const pw.BoxDecoration(color: PdfColors.grey300),
+                      children: [
+                        _pdfCell('Network Name', isHeader: true),
+                        _pdfCell('MAC Address', isHeader: true),
+                        _pdfCell('Security', isHeader: true),
+                        _pdfCell('Risk', isHeader: true),
+                        _pdfCell('Signal', isHeader: true),
+                        _pdfCell('Channel', isHeader: true),
+                        _pdfCell('Last Seen', isHeader: true),
+                      ],
+                    ),
+                    // Data rows
+                    ...chunk.map((r) {
+                      final riskColor = r['risk'] == 'High' 
+                          ? PdfColors.red100
+                          : r['risk'] == 'Medium'
+                              ? PdfColors.orange100
+                              : PdfColors.green100;
+                      
+                      return pw.TableRow(
+                        decoration: pw.BoxDecoration(color: riskColor),
+                        children: [
+                          _pdfCell(r['ssid']?.toString().isNotEmpty == true 
+                              ? r['ssid'].toString() 
+                              : 'Hidden Network'),
+                          _pdfCell(r['bssid']?.toString() ?? 'N/A'),
+                          _pdfCell(r['security']?.toString() ?? 'Unknown'),
+                          _pdfCell(r['risk']?.toString() ?? 'Unknown', isBold: true),
+                          _pdfCell(r['rssi'] != null ? '${r['rssi']} dBm' : 'N/A'),
+                          _pdfCell(r['channel']?.toString() ?? 'N/A'),
+                          _pdfCell(r['lastSeenAt'] != null
+                              ? DateTime.fromMillisecondsSinceEpoch(r['lastSeenAt'])
+                                  .toString().split('.')[0]
+                              : 'N/A', fontSize: 8),
+                        ],
+                      );
+                    }).toList(),
                   ],
                 ),
-              ],
-            );
-          },
-        ),
-      );
+              ];
+            },
+          ),
+        );
+      }
+      
       final pdfBytes = await pdf.save();
-      await Printing.sharePdf(bytes: pdfBytes, filename: 'scan_logs.pdf');
+      await Printing.sharePdf(bytes: pdfBytes, filename: 'zync_scan_logs.pdf');
     }
+  }
+  
+  pw.Widget _pdfCell(String text, {bool isHeader = false, bool isBold = false, double fontSize = 10}) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(6),
+      child: pw.Text(
+        text,
+        style: pw.TextStyle(
+          fontSize: fontSize,
+          fontWeight: isHeader || isBold ? pw.FontWeight.bold : pw.FontWeight.normal,
+        ),
+        textAlign: isHeader ? pw.TextAlign.center : pw.TextAlign.left,
+      ),
+    );
   }
 
   Future<void> _load() async {

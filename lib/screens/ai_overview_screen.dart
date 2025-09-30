@@ -3,6 +3,8 @@ import 'package:flutter/cupertino.dart';
 import 'dart:async';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 import '../config/gemini_config.dart';
 
 class AIOverviewScreen extends StatefulWidget {
@@ -23,10 +25,47 @@ class _AIOverviewScreenState extends State<AIOverviewScreen> {
   @override
   void initState() {
     super.initState();
-    // Auto-start scan when screen opens
+    // Check connection before auto-starting scan
     Future.delayed(const Duration(milliseconds: 500), () {
-      _startScan();
+      _checkConnectionAndScan();
     });
+  }
+
+  Future<void> _checkConnectionAndScan() async {
+    // Check if connected to ZYNC device
+    final prefs = await SharedPreferences.getInstance();
+    final connectedSSID = prefs.getString('connected_device_ssid');
+    
+    if (connectedSSID == null) {
+      setState(() {
+        _errorMessage = 'Not connected to ZYNC Device. Please connect a device first.';
+      });
+      return;
+    }
+    
+    // Verify actual WiFi connection
+    try {
+      final info = NetworkInfo();
+      final currentSSID = await info.getWifiName();
+      final cleanSSID = currentSSID?.replaceAll('"', '');
+      
+      if (cleanSSID != connectedSSID) {
+        // Clear stale connection state
+        await prefs.remove('connected_device_ssid');
+        setState(() {
+          _errorMessage = 'Not connected to ZYNC Device. Please connect a device first.';
+        });
+        return;
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Not connected to ZYNC Device. Please connect a device first.';
+      });
+      return;
+    }
+    
+    // If connected, start scan
+    _startScan();
   }
 
   Future<void> _startScan() async {
@@ -247,7 +286,7 @@ Keep the response concise and user-friendly (max 200 words).
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _isScanning ? null : _startScan,
+            onPressed: _isScanning ? null : _checkConnectionAndScan,
           ),
         ],
       ),
@@ -319,7 +358,7 @@ Keep the response concise and user-friendly (max 200 words).
                         ),
                         const SizedBox(height: 24),
                         ElevatedButton.icon(
-                          onPressed: _startScan,
+                          onPressed: _checkConnectionAndScan,
                           icon: const Icon(Icons.refresh),
                           label: const Text('Scan Again'),
                         ),
