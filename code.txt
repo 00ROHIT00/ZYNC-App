@@ -18,6 +18,13 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(
 // Single Button Pin
 #define BTN_CYCLE 25
 
+// Battery Monitoring
+#define BATTERY_PIN 34 // ADC pin for battery voltage (use GPIO 34, 35, 36, or 39)
+#define CHARGING_PIN 33 // Pin to detect if USB is connected/charging (optional)
+const float BATTERY_MAX_VOLTAGE = 4.2; // Fully charged 18650
+const float BATTERY_MIN_VOLTAGE = 3.0; // Empty 18650
+const float VOLTAGE_DIVIDER_RATIO = 2.0; // Adjust based on your voltage divider (R1=R2=10k gives 2.0)
+
 // WiFi
 const char* ssid = "ZYNC_Device";
 const char* password = "zync1234";
@@ -69,6 +76,11 @@ void setup() {
   
   pinMode(LED_PIN, OUTPUT);
   pinMode(BTN_CYCLE, INPUT_PULLUP);
+  pinMode(CHARGING_PIN, INPUT_PULLUP); // Detect charging status
+  
+  // Configure ADC for battery reading
+  analogReadResolution(12); // 12-bit ADC (0-4095)
+  analogSetAttenuation(ADC_11db); // Full range: 0-3.3V
 
   u8g2.begin();
 
@@ -89,11 +101,15 @@ void setup() {
   u8g2.print("Scanning...");
   u8g2.sendBuffer();
 
-  WiFi.mode(WIFI_AP);
+  // Use AP+STA mode for better scanning capability
+  WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(ssid, password, 1, 0, 4); // channel 1, open, max 4 connections
     WiFi.softAPConfig(IPAddress(192,168,4,1), IPAddress(192,168,4,1), IPAddress(255,255,255,0));
     WiFi.softAPsetHostname("ZYNC_Device");
     WiFi.setSleep(false); // Disable WiFi sleep
+    
+    // Disconnect from any station connections to avoid interference
+    WiFi.disconnect();
 
   // Print ESP32's MAC address for device identification
   Serial.println("=== ZYNC Device Information ===");
@@ -244,8 +260,9 @@ void performLiveScan() {
   // Perform a quick scan for live data
   Serial.println("[DEBUG] Starting WiFi.scanDelete()");
   WiFi.scanDelete();
-  Serial.println("[DEBUG] Starting WiFi.scanNetworks(true)");
-  int scanResult = WiFi.scanNetworks(true);
+  Serial.println("[DEBUG] Starting WiFi.scanNetworks with all channels");
+  // Scan all channels: async=true, show_hidden=true, passive=false, max_ms_per_chan=200 (faster for live scan)
+  int scanResult = WiFi.scanNetworks(true, true, false, 200);
 
   if (scanResult == WIFI_SCAN_FAILED) {
     Serial.println("[DEBUG] WiFi.scanNetworks failed");
@@ -311,7 +328,10 @@ void scanNetworks() {
   
   // Start the scan with a timeout
   WiFi.scanDelete(); // Clear any previous scan
-  int scanResult = WiFi.scanNetworks(true); // Start async scan
+  
+  // Scan ALL channels (1-13) with show_hidden=true to find all networks
+  // Parameters: async=true, show_hidden=true, passive=false, max_ms_per_chan=300
+  int scanResult = WiFi.scanNetworks(true, true, false, 300);
   
   if (scanResult == WIFI_SCAN_FAILED) {
     Serial.println("Scan failed to start");
@@ -404,25 +424,211 @@ String translateEncryptionType(wifi_auth_mode_t type) {
 void showNetwork(int index) {
   if (networks.empty()) return;
   u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_6x10_tr);
-
+  
   NetworkInfo net = networks[index];
-
-  // SSID
-  int titleY = 10;
-  int ssidX = (128 - u8g2.getStrWidth(net.ssid.c_str())) / 2;
-  u8g2.setCursor(ssidX, titleY);
-  u8g2.print(net.ssid);
-
-  // Details
-  int yStart = 20;
-  u8g2.setCursor(0, yStart);        u8g2.print("MAC: ");   u8g2.print(net.bssid);
-  u8g2.setCursor(0, yStart + 10);   u8g2.print("RSSI: ");  u8g2.print(net.rssi); u8g2.print(" dBm");
-  u8g2.setCursor(0, yStart + 20);   u8g2.print("Channel: "); u8g2.print(net.channel);
-  u8g2.setCursor(0, yStart + 30);   u8g2.print("Freq: ");  u8g2.print(net.frequency); u8g2.print(" MHz");
-  u8g2.setCursor(0, yStart + 40);   u8g2.print("Sec: ");   u8g2.print(net.encryption);
-
+  
+  // Calculate user-friendly metrics
+  String safetyLevel = getSafetyLevel(net.encryption);
+  String signalQuality = getSignalQuality(net.rssi);
+  String simpleSecurity = getSimpleSecurity(net.encryption);
+  String riskLevel = getRiskLevel(net.encryption);
+  
+  // Get battery info
+  int batteryPercent = getBatteryPercentage();
+  bool charging = isCharging();
+  
+  // === OPTIMIZED DISPLAY LAYOUT ===
+  
+  // Battery Icon (Top Right Corner)
+  drawBatteryIcon(88, 2, batteryPercent, charging);
+  
+  // Battery Percentage (Next to icon)
+  u8g2.setFont(u8g2_font_5x7_tr);
+  String batteryText = String(batteryPercent) + "%";
+  u8g2.setCursor(110, 9);
+  u8g2.print(batteryText);
+  
+  // Network Name (Top Left, Bold)
+  u8g2.setFont(u8g2_font_helvB08_tr); // Bold font
+  String displaySSID = net.ssid;
+  if (displaySSID.length() > 12) {
+    displaySSID = displaySSID.substring(0, 9) + "...";
+  }
+  u8g2.setCursor(2, 10);
+  u8g2.print(displaySSID);
+  
+  // Divider line
+  u8g2.drawHLine(0, 12, 128);
+  
+  // Safety Status (Large, Centered, NO ICON)
+  u8g2.setFont(u8g2_font_helvB12_tr); // Even bigger bold font
+  int safetyX = (128 - u8g2.getStrWidth(safetyLevel.c_str())) / 2;
+  u8g2.setCursor(safetyX, 28);
+  u8g2.print(safetyLevel);
+  
+  // Signal Strength Bar (Horizontal progress bar)
+  int barWidth = 100; // Total bar width
+  int barHeight = 6;  // Bar height
+  int barX = (128 - barWidth) / 2; // Center the bar
+  int barY = 32;
+  
+  // Draw outline
+  u8g2.drawFrame(barX, barY, barWidth, barHeight);
+  
+  // Calculate fill based on RSSI
+  int fillWidth = getSignalBarWidth(net.rssi, barWidth - 4); // -4 for padding
+  if (fillWidth > 0) {
+    u8g2.drawBox(barX + 2, barY + 2, fillWidth, barHeight - 4);
+  }
+  
+  // Signal Strength - BOLD BARS (Centered)
+  u8g2.setFont(u8g2_font_helvB10_tr); // Bold font for bars
+  String signalBars = getSignalBars(net.rssi);
+  int barsX = (128 - u8g2.getStrWidth(signalBars.c_str())) / 2;
+  u8g2.setCursor(barsX, 48);
+  u8g2.print(signalBars);
+  
+  // Signal Quality Text (Below bars, Centered, Smaller)
+  u8g2.setFont(u8g2_font_6x10_tr); // Normal font
+  int qualityX = (128 - u8g2.getStrWidth(signalQuality.c_str())) / 2;
+  u8g2.setCursor(qualityX, 52);
+  u8g2.print(signalQuality);
+  
+  // Bottom Row: Security and Risk (Side by side)
+  u8g2.setFont(u8g2_font_5x7_tr); // Smaller font for bottom info
+  u8g2.setCursor(0, 62);
+  u8g2.print("Sec: ");
+  u8g2.print(simpleSecurity);
+  
+  // Risk on the right side
+  String riskText = "Risk: " + riskLevel;
+  int riskX = 128 - u8g2.getStrWidth(riskText.c_str());
+  u8g2.setCursor(riskX, 62);
+  u8g2.print(riskText);
+  
   u8g2.sendBuffer();
+}
+
+// === BATTERY MONITORING FUNCTIONS ===
+
+int getBatteryPercentage() {
+  // Check if charging (USB connected)
+  if (digitalRead(CHARGING_PIN) == LOW) {
+    return 100; // Show 100% when plugged in
+  }
+  
+  // Read battery voltage
+  int adcValue = analogRead(BATTERY_PIN);
+  float voltage = (adcValue / 4095.0) * 3.3 * VOLTAGE_DIVIDER_RATIO;
+  
+  // Calculate percentage
+  float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
+  
+  // Constrain to 0-100%
+  if (percentage > 100) percentage = 100;
+  if (percentage < 0) percentage = 0;
+  
+  return (int)percentage;
+}
+
+bool isCharging() {
+  return digitalRead(CHARGING_PIN) == LOW;
+}
+
+void drawBatteryIcon(int x, int y, int percentage, bool charging) {
+  // Battery outline (16x8 pixels)
+  u8g2.drawFrame(x, y, 14, 8);
+  u8g2.drawBox(x + 14, y + 2, 2, 4); // Battery tip
+  
+  // Fill level based on percentage
+  int fillWidth = (percentage * 10) / 100; // Max 10 pixels fill
+  if (fillWidth > 0) {
+    u8g2.drawBox(x + 2, y + 2, fillWidth, 4);
+  }
+  
+  // Charging indicator (lightning bolt symbol)
+  if (charging) {
+    u8g2.setFont(u8g2_font_5x7_tr);
+    u8g2.drawStr(x + 18, y + 7, "+");
+  }
+}
+
+// === HELPER FUNCTIONS FOR USER-FRIENDLY DISPLAY ===
+
+String getSafetyLevel(String encryption) {
+  if (encryption == "Open") return "UNSAFE";
+  if (encryption == "WEP") return "RISKY";
+  if (encryption == "WPA") return "OKAY";
+  if (encryption == "WPA2" || encryption == "WPA/WPA2") return "SAFE TO USE";
+  if (encryption == "Enterprise") return "VERY SAFE";
+  return "UNKNOWN";
+}
+
+String getSafetyIcon(String encryption) {
+  // Using simple ASCII characters that display well on OLED
+  if (encryption == "Open") return "[!]"; // Warning
+  if (encryption == "WEP") return "[~]"; // Caution
+  if (encryption == "WPA") return "[+]"; // Okay
+  if (encryption == "WPA2" || encryption == "WPA/WPA2") return "[*]"; // Good
+  if (encryption == "Enterprise") return "[**]"; // Excellent
+  return "[?]";
+}
+
+String getSignalQuality(int rssi) {
+  if (rssi >= -50) return "Excellent";
+  if (rssi >= -60) return "Good";
+  if (rssi >= -70) return "Fair";
+  if (rssi >= -80) return "Weak";
+  return "Very Weak";
+}
+
+String getSignalBars(int rssi) {
+  // Visual signal strength with bold block characters
+  if (rssi >= -50) return "█████"; // 5 bars - Excellent
+  if (rssi >= -60) return "████▒"; // 4 bars - Good
+  if (rssi >= -70) return "███▒▒"; // 3 bars - Fair
+  if (rssi >= -80) return "██▒▒▒"; // 2 bars - Weak
+  return "█▒▒▒▒"; // 1 bar - Very Weak
+}
+
+int getSignalBarWidth(int rssi, int maxWidth) {
+  // Convert RSSI to percentage for horizontal bar
+  // RSSI range: -100 (worst) to -30 (best)
+  int percentage;
+  
+  if (rssi >= -50) {
+    percentage = 100; // Excellent
+  } else if (rssi >= -60) {
+    percentage = 80; // Good
+  } else if (rssi >= -70) {
+    percentage = 60; // Fair
+  } else if (rssi >= -80) {
+    percentage = 40; // Weak
+  } else if (rssi >= -90) {
+    percentage = 20; // Very Weak
+  } else {
+    percentage = 10; // Extremely Weak
+  }
+  
+  return (maxWidth * percentage) / 100;
+}
+
+String getSimpleSecurity(String encryption) {
+  if (encryption == "Open") return "None";
+  if (encryption == "WEP") return "Weak";
+  if (encryption == "WPA") return "Basic";
+  if (encryption == "WPA2" || encryption == "WPA/WPA2") return "Protected";
+  if (encryption == "Enterprise") return "Maximum";
+  return "Unknown";
+}
+
+String getRiskLevel(String encryption) {
+  if (encryption == "Open") return "High";
+  if (encryption == "WEP") return "Medium";
+  if (encryption == "WPA") return "Medium";
+  if (encryption == "WPA2" || encryption == "WPA/WPA2") return "Low";
+  if (encryption == "Enterprise") return "Very Low";
+  return "Unknown";
 }
 
 void handleButton() {
