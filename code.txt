@@ -44,6 +44,11 @@ const unsigned long scanInterval = 5000;
 int currentIndex = 0;
 int foundNetworks = 0;
 
+// Connection tracking
+bool wasConnected = false;
+unsigned long connectionMessageTime = 0;
+bool showingConnectionMessage = false;
+
 // Debounce
 unsigned long lastButtonTime = 0;
 const int debounceDelay = 200;
@@ -136,6 +141,9 @@ void setup() {
 }
 
 void loop() {
+  // Check for WiFi station connections (phone connecting to ZYNC_Device)
+  checkStationConnection();
+  
   // Handle TCP connections and Live Scan
   handleTCPConnection();
 
@@ -150,9 +158,83 @@ void loop() {
     lastStatus = millis();
   }
 
-  // Handle button presses
-  handleButton();
+  // Handle button presses (but not while showing connection message)
+  if (!showingConnectionMessage) {
+    handleButton();
+  }
+  
   delay(50);
+}
+
+void checkStationConnection() {
+  // Check if a device (phone) is connected to the ESP32 AP
+  int numStations = WiFi.softAPgetStationNum();
+  bool isConnected = (numStations > 0);
+  
+  // Detect new connection
+  if (isConnected && !wasConnected) {
+    Serial.println("========================================");
+    Serial.println("Device connected to ZYNC_Device WiFi!");
+    Serial.print("Number of connected devices: ");
+    Serial.println(numStations);
+    Serial.println("========================================");
+    
+    // Show 'CONNECTED!' on OLED
+    showingConnectionMessage = true;
+    connectionMessageTime = millis();
+    
+    u8g2.clearBuffer();
+    
+    // Draw a box background for emphasis
+    u8g2.drawBox(0, 0, 128, 64);
+    u8g2.setDrawColor(0); // Inverted colors (white text on black)
+    
+    // Draw checkmark circle (top center)
+    u8g2.drawCircle(64, 22, 12); // Circle at center
+    u8g2.drawCircle(64, 22, 11); // Double circle for emphasis
+    
+    // Draw checkmark inside circle
+    u8g2.drawLine(58, 22, 61, 26); // Left part of check
+    u8g2.drawLine(61, 26, 70, 18); // Right part of check
+    u8g2.drawLine(58, 23, 61, 27); // Thicker check
+    u8g2.drawLine(61, 27, 70, 19); // Thicker check
+    
+    // "CONNECTED!" text (smaller, readable size)
+    u8g2.setFont(u8g2_font_helvB12_tr); // Medium bold font
+    const char* msg = "CONNECTED!";
+    int16_t x = (128 - u8g2.getStrWidth(msg)) / 2;
+    int16_t y = 48; // Below the checkmark
+    u8g2.setCursor(x, y);
+    u8g2.print(msg);
+    u8g2.sendBuffer();
+    
+    // Reset draw color back to normal
+    u8g2.setDrawColor(1);
+    
+    wasConnected = true;
+  }
+  
+  // Detect disconnection
+  if (!isConnected && wasConnected) {
+    Serial.println("Device disconnected from ZYNC_Device WiFi");
+    wasConnected = false;
+    showingConnectionMessage = false;
+    
+    // Return to network display
+    if (foundNetworks > 0) {
+      showNetwork(currentIndex);
+    }
+  }
+  
+  // Clear connection message after 2 seconds
+  if (showingConnectionMessage && (millis() - connectionMessageTime > 2000)) {
+    showingConnectionMessage = false;
+    
+    // Return to network display
+    if (foundNetworks > 0) {
+      showNetwork(currentIndex);
+    }
+  }
 }
 
 void handleTCPConnection() {
@@ -172,19 +254,6 @@ void handleTCPConnection() {
       Serial.println(client.remotePort());
       Serial.println("========================================");
       client.println("ZYNC_LIVE_SCAN_READY");
-
-      // Show '1 Device Connected' on OLED
-      u8g2.setDrawColor(1); // Ensure text is visible
-      u8g2.clearBuffer();
-      u8g2.setFont(u8g2_font_helvB18_tr); // Bold, readable font
-      const char* msg = "1 Device Connected";
-      int16_t x = (128 - u8g2.getStrWidth(msg)) / 2;
-      int16_t y = 40; // Vertically centered for 18pt font
-      u8g2.setCursor(x, y);
-      u8g2.print(msg);
-      u8g2.sendBuffer();
-      // Prevent immediate overwrite by scan results: skip showNetwork for 2 seconds
-      delay(2000);
     }
     else {
       Serial.println("No client available for Live Scan.");
