@@ -38,7 +38,10 @@ class NetworkStatsChart extends StatelessWidget {
             ),
             child: Text(
               'Network Security Overview',
-              style: Theme.of(context).textTheme.titleMedium,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
           ),
           Expanded(
@@ -94,15 +97,13 @@ class NetworkStatsChart extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            !isConnected ? Icons.wifi_off : Icons.radar,
+                            Icons.radar,
                             size: 48,
                             color: Theme.of(context).colorScheme.primary.withOpacity(0.6),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            !isConnected 
-                              ? 'Connect ZYNC to view stats'
-                              : 'Perform a live scan to view stats',
+                            'Perform a live scan to view stats',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 14,

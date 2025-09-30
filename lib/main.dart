@@ -9,6 +9,7 @@ import 'dart:io';
 import 'screens/add_device_screen.dart';
 import 'screens/live_scan_screen.dart';
 import 'screens/scan_logs_screen.dart';
+import 'screens/ai_overview_screen.dart';
 import 'services/connection_service.dart';
 import 'services/network_stats.dart';
 import 'widgets/network_stats_chart.dart';
@@ -1411,20 +1412,10 @@ We reserve the right to update these Terms at any time. Continued use of the app
                     ),
                     onTap: () {
                       Navigator.of(context).pop(); // Close drawer
-                      // TODO: Navigate to AI Overview screen
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('AI Overview'),
-                          content: const Text(
-                            'AI-powered network analysis using Gemini API will be implemented here.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('OK'),
-                            ),
-                          ],
+                      Navigator.push(
+                        context,
+                        CupertinoPageRoute(
+                          builder: (context) => const AIOverviewScreen(),
                         ),
                       );
                     },
@@ -1621,21 +1612,10 @@ We reserve the right to update these Terms at any time. Continued use of the app
                           child: _buildDashboardButton(
                             context,
                             onTap: () {
-                              // TODO: Navigate to AI Overview screen
-                              showDialog(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('AI Overview'),
-                                  content: const Text(
-                                    'AI-powered network analysis using Gemini API will be implemented here.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(),
-                                      child: const Text('OK'),
-                                    ),
-                                  ],
+                              Navigator.push(
+                                context,
+                                CupertinoPageRoute(
+                                  builder: (context) => const AIOverviewScreen(),
                                 ),
                               );
                             },
@@ -1791,21 +1771,12 @@ class _NetworkStatsDashboardState extends State<NetworkStatsDashboard> {
   }
 
   Future<void> _checkConnection() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final connectedSSID = prefs.getString('connected_device_ssid');
-      if (mounted) {
-        setState(() {
-          _isConnected = connectedSSID != null && connectedSSID.isNotEmpty;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isConnected = false;
-        });
-      }
-    }
+    // We don't actually need to check connection for the overlay
+    // The overlay should only be hidden if there's scan data
+    // So this method can be simplified or removed
+    setState(() {
+      _isConnected = false; // Not used anymore
+    });
   }
 
   Future<void> _loadStats() async {

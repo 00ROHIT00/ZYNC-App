@@ -48,7 +48,10 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
       }
       if (mounted) {
         setState(() {
-          _phoneScanResults = results;
+          // Filter out ZYNC_Device from display
+          _phoneScanResults = results.where((n) => 
+            n.ssid.toUpperCase() != 'ZYNC_DEVICE'
+          ).toList();
           _isPhoneScanning = false;
         });
       }
@@ -57,11 +60,16 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
         final now = DateTime.now().millisecondsSinceEpoch;
         final sessionId = 'session_$now';
         
+        // Filter out ZYNC_Device from results
+        final filteredResults = results.where((n) => 
+          n.ssid.toUpperCase() != 'ZYNC_DEVICE'
+        ).toList();
+        
         // Calculate statistics (Low risk = Secure, Medium/High = Vulnerable)
         int secureCount = 0;
         int vulnerableCount = 0;
         
-        for (final n in results) {
+        for (final n in filteredResults) {
           final risk = _assessRisk(n.security);
           if (risk == _Risk.low) {
             secureCount++;
@@ -70,7 +78,7 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
           }
         }
         
-        final payload = results
+        final payload = filteredResults
             .map((n) => {
                   'ssid': n.ssid,
                   'bssid': n.mac,
@@ -85,11 +93,11 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
             .toList();
         await ScanLogDb().upsertNetworks(payload);
         
-        // Save session statistics
+        // Save session statistics (excluding ZYNC_Device)
         await ScanLogDb().saveScanSession(
           sessionId: sessionId,
           timestamp: now,
-          totalNetworks: results.length,
+          totalNetworks: filteredResults.length,
           secureNetworks: secureCount,
           vulnerableNetworks: vulnerableCount,
         );
