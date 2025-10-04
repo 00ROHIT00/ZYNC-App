@@ -81,20 +81,29 @@ class _AIOverviewScreenState extends State<AIOverviewScreen> {
       _errorMessage = null;
       _networks.clear();
       _expandedNetworkBssid = null;
-      _aiAnalysisCache.clear();
       _loadingAnalysis.clear();
     });
 
     try {
       final List<WifiNetwork> networks = await WiFiForIoTPlugin.loadWifiList();
       final List<NetworkData> results = networks
-          .map((n) => NetworkData(
-                ssid: n.ssid ?? 'Hidden Network',
-                bssid: n.bssid ?? '',
-                rssi: n.level ?? 0,
-                channel: n.frequency ?? 0,
-                security: n.capabilities ?? 'Unknown',
-              ))
+          .map((n) {
+            // Handle empty capabilities as Open network
+            String security = n.capabilities ?? '';
+            if (security.isEmpty || security.trim().isEmpty) {
+              security = 'Open';
+            } else if (security == 'Unknown') {
+              security = 'Open';
+            }
+            
+            return NetworkData(
+              ssid: n.ssid ?? 'Unknown',
+              bssid: n.bssid ?? '',
+              rssi: n.level ?? 0,
+              channel: n.frequency ?? 0,
+              security: security,
+            );
+          })
           .where((n) => n.ssid.toUpperCase() != 'ZYNC_DEVICE') // Filter out ZYNC_Device
           .toList();
 

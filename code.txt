@@ -16,14 +16,9 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(
 #define LED_PIN 2
 
 // Single Button Pin
-#define BTN_CYCLE 25
+#define BTN_CYCLE 33  // Changed from 25 to 33
 
-// Battery Monitoring
-#define BATTERY_PIN 34 // ADC pin for battery voltage (use GPIO 34, 35, 36, or 39)
-#define CHARGING_PIN 33 // Pin to detect if USB is connected/charging (optional)
-const float BATTERY_MAX_VOLTAGE = 4.2; // Fully charged 18650
-const float BATTERY_MIN_VOLTAGE = 3.0; // Empty 18650
-const float VOLTAGE_DIVIDER_RATIO = 2.0; // Adjust based on your voltage divider (R1=R2=10k gives 2.0)
+// No battery monitoring - using Bluetooth connection indicator instead
 
 // WiFi
 const char* ssid = "ZYNC_Device";
@@ -48,6 +43,7 @@ int foundNetworks = 0;
 bool wasConnected = false;
 unsigned long connectionMessageTime = 0;
 bool showingConnectionMessage = false;
+bool appConnected = false; // Track if app is connected via TCP
 
 // Debounce
 unsigned long lastButtonTime = 0;
@@ -81,11 +77,6 @@ void setup() {
   
   pinMode(LED_PIN, OUTPUT);
   pinMode(BTN_CYCLE, INPUT_PULLUP);
-  pinMode(CHARGING_PIN, INPUT_PULLUP); // Detect charging status
-  
-  // Configure ADC for battery reading
-  analogReadResolution(12); // 12-bit ADC (0-4095)
-  analogSetAttenuation(ADC_11db); // Full range: 0-3.3V
 
   u8g2.begin();
 
@@ -243,6 +234,7 @@ void handleTCPConnection() {
     if (client) {
       Serial.println("[DEBUG] Client disconnected from Live Scan.");
       client.stop();
+      appConnected = false; // Mark app as disconnected
     }
     client = tcpServer.available();
     if (client) {
@@ -254,6 +246,13 @@ void handleTCPConnection() {
       Serial.println(client.remotePort());
       Serial.println("========================================");
       client.println("ZYNC_LIVE_SCAN_READY");
+      appConnected = true; // Mark app as connected
+      Serial.println("[DEBUG] appConnected set to TRUE");
+      
+      // Force display update to show Bluetooth icon
+      if (foundNetworks > 0) {
+        showNetwork(currentIndex);
+      }
     }
     else {
       Serial.println("No client available for Live Scan.");
@@ -329,17 +328,9 @@ void stopLiveScan() {
 }
 
 void sendBatteryStatus() {
-  int batteryPercent = getBatteryPercentage();
-  bool charging = isCharging();
-  
-  // Send battery status: "BATTERY:percentage:charging"
-  String response = "BATTERY:" + String(batteryPercent) + ":" + String(charging ? "1" : "0");
-  client.println(response);
-  
-  Serial.print("Sent battery status: ");
-  Serial.print(batteryPercent);
-  Serial.print("% ");
-  Serial.println(charging ? "(Charging)" : "(Not charging)");
+  // Battery monitoring removed - no longer supported
+  client.println("BATTERY:0:0:N/A");
+  Serial.println("Battery status request received (not supported)");
 }
 
 void performLiveScan() {
@@ -519,20 +510,13 @@ void showNetwork(int index) {
   String simpleSecurity = getSimpleSecurity(net.encryption);
   String riskLevel = getRiskLevel(net.encryption);
   
-  // Get battery info
-  int batteryPercent = getBatteryPercentage();
-  bool charging = isCharging();
-  
   // === OPTIMIZED DISPLAY LAYOUT ===
   
-  // Battery Icon (Top Right Corner)
-  drawBatteryIcon(88, 2, batteryPercent, charging);
-  
-  // Battery Percentage (Next to icon)
-  u8g2.setFont(u8g2_font_5x7_tr);
-  String batteryText = String(batteryPercent) + "%";
-  u8g2.setCursor(110, 9);
-  u8g2.print(batteryText);
+  // Bluetooth Icon (Top Right Corner) - Show when WiFi station connected
+  int numStations = WiFi.softAPgetStationNum();
+  if (numStations > 0) {
+    drawBluetoothIcon(110, 2);
+  }
   
   // Network Name (Top Left, Bold)
   u8g2.setFont(u8g2_font_helvB08_tr); // Bold font
@@ -595,48 +579,24 @@ void showNetwork(int index) {
   u8g2.sendBuffer();
 }
 
-// === BATTERY MONITORING FUNCTIONS ===
+// === BLUETOOTH ICON FUNCTION ===
 
-int getBatteryPercentage() {
-  // Check if charging (USB connected)
-  if (digitalRead(CHARGING_PIN) == LOW) {
-    return 100; // Show 100% when plugged in
-  }
+void drawBluetoothIcon(int x, int y) {
+  // Simple Bluetooth icon using lines (6x6 pixels - even smaller)
+  // Vertical line
+  u8g2.drawLine(x + 3, y, x + 3, y + 6);
   
-  // Read battery voltage
-  int adcValue = analogRead(BATTERY_PIN);
-  float voltage = (adcValue / 4095.0) * 3.3 * VOLTAGE_DIVIDER_RATIO;
+  // Top triangle
+  u8g2.drawLine(x + 3, y, x + 5, y + 2);
+  u8g2.drawLine(x + 5, y + 2, x + 3, y + 3);
   
-  // Calculate percentage
-  float percentage = ((voltage - BATTERY_MIN_VOLTAGE) / (BATTERY_MAX_VOLTAGE - BATTERY_MIN_VOLTAGE)) * 100.0;
+  // Bottom triangle
+  u8g2.drawLine(x + 3, y + 3, x + 5, y + 4);
+  u8g2.drawLine(x + 5, y + 4, x + 3, y + 6);
   
-  // Constrain to 0-100%
-  if (percentage > 100) percentage = 100;
-  if (percentage < 0) percentage = 0;
-  
-  return (int)percentage;
-}
-
-bool isCharging() {
-  return digitalRead(CHARGING_PIN) == LOW;
-}
-
-void drawBatteryIcon(int x, int y, int percentage, bool charging) {
-  // Battery outline (16x8 pixels)
-  u8g2.drawFrame(x, y, 14, 8);
-  u8g2.drawBox(x + 14, y + 2, 2, 4); // Battery tip
-  
-  // Fill level based on percentage
-  int fillWidth = (percentage * 10) / 100; // Max 10 pixels fill
-  if (fillWidth > 0) {
-    u8g2.drawBox(x + 2, y + 2, fillWidth, 4);
-  }
-  
-  // Charging indicator (lightning bolt symbol)
-  if (charging) {
-    u8g2.setFont(u8g2_font_5x7_tr);
-    u8g2.drawStr(x + 18, y + 7, "+");
-  }
+  // Cross lines
+  u8g2.drawLine(x + 1, y + 2, x + 5, y + 4);
+  u8g2.drawLine(x + 1, y + 4, x + 5, y + 2);
 }
 
 // === HELPER FUNCTIONS FOR USER-FRIENDLY DISPLAY ===
