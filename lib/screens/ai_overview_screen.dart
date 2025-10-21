@@ -88,13 +88,8 @@ class _AIOverviewScreenState extends State<AIOverviewScreen> {
       final List<WifiNetwork> networks = await WiFiForIoTPlugin.loadWifiList();
       final List<NetworkData> results = networks
           .map((n) {
-            // Handle empty capabilities as Open network
-            String security = n.capabilities ?? '';
-            if (security.isEmpty || security.trim().isEmpty) {
-              security = 'Open';
-            } else if (security == 'Unknown') {
-              security = 'Open';
-            }
+            // Parse the capabilities string to extract actual security protocol
+            String security = _parseSecurityType(n.capabilities ?? '');
             
             return NetworkData(
               ssid: n.ssid ?? 'Unknown',
@@ -293,6 +288,42 @@ Keep response clear and user-friendly (max 250 words). Focus on practical securi
     if (rssi >= -60) return 'Good';
     if (rssi >= -70) return 'Fair';
     return 'Weak';
+  }
+
+  String _parseSecurityType(String capabilities) {
+    if (capabilities.isEmpty || capabilities.trim().isEmpty) {
+      return 'Open';
+    }
+    
+    final caps = capabilities.toUpperCase();
+    
+    // Check for specific security protocols (order matters - check strongest first)
+    if (caps.contains('WPA3')) return 'WPA3';
+    if (caps.contains('WPA2')) return 'WPA2';
+    if (caps.contains('WPA')) return 'WPA';
+    if (caps.contains('WEP')) return 'WEP';
+    
+    // If only ESS, WPS, or other non-security capabilities are present, it's Open
+    // ESS = Extended Service Set (infrastructure mode indicator)
+    // WPS = Wi-Fi Protected Setup (convenience feature)
+    // These are NOT security types
+    if (caps.contains('ESS') || caps.contains('WPS')) {
+      // Check if there are any actual security indicators
+      final hasSecurityProtocol = caps.contains('WPA') || 
+                                  caps.contains('WEP') || 
+                                  caps.contains('PSK') || 
+                                  caps.contains('EAP');
+      if (!hasSecurityProtocol) {
+        return 'Open';
+      }
+    }
+    
+    // If capabilities string is Unknown or unrecognized, treat as Open for safety
+    if (caps == 'UNKNOWN' || caps == 'NONE') {
+      return 'Open';
+    }
+    
+    return 'Unknown';
   }
 
   String _getRiskLevel(String security) {

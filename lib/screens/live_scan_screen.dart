@@ -38,7 +38,7 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
                 mac: n.bssid ?? '',
                 rssi: n.level ?? 0,
                 channel: n.frequency ?? 0,
-                security: n.capabilities ?? '',
+                security: _parseSecurityType(n.capabilities ?? ''),
               ))
           .toList();
       final elapsed = DateTime.now().difference(start).inMilliseconds;
@@ -830,6 +830,42 @@ class _LiveScanScreenState extends State<LiveScanScreen> {
             ? 'OK'
             : 'Weak';
     return Text('Signal: $label', style: const TextStyle(fontFamily: 'Barlow'));
+  }
+
+  String _parseSecurityType(String capabilities) {
+    if (capabilities.isEmpty || capabilities.trim().isEmpty) {
+      return 'Open';
+    }
+    
+    final caps = capabilities.toUpperCase();
+    
+    // Check for specific security protocols (order matters - check strongest first)
+    if (caps.contains('WPA3')) return 'WPA3';
+    if (caps.contains('WPA2')) return 'WPA2';
+    if (caps.contains('WPA')) return 'WPA';
+    if (caps.contains('WEP')) return 'WEP';
+    
+    // If only ESS, WPS, or other non-security capabilities are present, it's Open
+    // ESS = Extended Service Set (infrastructure mode indicator)
+    // WPS = Wi-Fi Protected Setup (convenience feature)
+    // These are NOT security types
+    if (caps.contains('ESS') || caps.contains('WPS')) {
+      // Check if there are any actual security indicators
+      final hasSecurityProtocol = caps.contains('WPA') || 
+                                  caps.contains('WEP') || 
+                                  caps.contains('PSK') || 
+                                  caps.contains('EAP');
+      if (!hasSecurityProtocol) {
+        return 'Open';
+      }
+    }
+    
+    // If capabilities string is Unknown or unrecognized, treat as Open for safety
+    if (caps == 'UNKNOWN' || caps == 'NONE') {
+      return 'Open';
+    }
+    
+    return 'Unknown';
   }
 
   _Risk _assessRisk(String security) {

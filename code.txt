@@ -3,6 +3,7 @@
 #include <Wire.h>
 #include <vector>
 #include <WiFiServer.h>
+#include <Preferences.h>
 
 // OLED Setup (4-pin I²C)
 U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(
@@ -18,7 +19,25 @@ U8G2_SSD1306_128X64_NONAME_F_SW_I2C u8g2(
 // Single Button Pin
 #define BTN_CYCLE 33  // Changed from 25 to 33
 
-// No battery monitoring - using Bluetooth connection indicator instead
+// ============================================================================
+// BATTERY MANAGEMENT SYSTEM (NVS-Based Pseudo-Battery Meter)
+// ============================================================================
+
+// Battery Configuration
+#define BATTERY_FULL_CAPACITY_MAH    2200    // Full battery capacity (mAh)
+#define BATTERY_AVERAGE_CURRENT_MA   250     // Average current consumption (mA)
+#define BATTERY_UPDATE_INTERVAL_MS   30000   // Update every 30 seconds
+#define BATTERY_RESET_HOLD_TIME_MS   5000    // Hold button 5s to reset
+#define BATTERY_CRITICAL_MAH         220     // 10% threshold
+#define BATTERY_LOW_MAH              440     // 20% threshold
+
+// Battery State Variables
+Preferences batteryPrefs;
+float batteryRemainingMah = BATTERY_FULL_CAPACITY_MAH;
+unsigned long lastBatteryUpdate = 0;
+unsigned long batteryResetPressStart = 0;
+bool batteryResetButtonPressed = false;
+bool lowBatteryWarningShown = false;
 
 // WiFi
 const char* ssid = "ZYNC_Device";
@@ -65,6 +84,158 @@ std::vector<NetworkInfo> networks;
 int scanDots = 0;
 unsigned long lastDotUpdate = 0;
 const int dotUpdateInterval = 300; // Update dots every 300ms
+
+// ============================================================================
+// BATTERY MANAGEMENT FUNCTIONS
+// ============================================================================
+
+void initBattery() {
+  if (!batteryPrefs.begin("battery", false)) {
+    Serial.println("[ERROR] Failed to initialize NVS for battery!");
+    return;
+  }
+  
+  bool isInitialized = batteryPrefs.getBool("init", false);
+  
+  if (!isInitialized) {
+    batteryPrefs.putFloat("remaining", BATTERY_FULL_CAPACITY_MAH);
+    batteryPrefs.putBool("init", true);
+    Serial.println("[Battery] NVS initialized with full capacity");
+  }
+  
+  batteryRemainingMah = batteryPrefs.getFloat("remaining", BATTERY_FULL_CAPACITY_MAH);
+  batteryPrefs.end();
+  
+  lastBatteryUpdate = millis();
+  
+  Serial.println("========================================");
+  Serial.println("Battery Manager Initialized");
+  Serial.print("Remaining: ");
+  Serial.print(batteryRemainingMah, 2);
+  Serial.print(" mAh (");
+  Serial.print((int)((batteryRemainingMah / BATTERY_FULL_CAPACITY_MAH) * 100));
+  Serial.println("%)");
+  Serial.println("========================================");
+}
+
+void updateBatteryConsumption() {
+  unsigned long currentTime = millis();
+  unsigned long elapsedTime = currentTime - lastBatteryUpdate;
+  
+  if (elapsedTime < BATTERY_UPDATE_INTERVAL_MS) {
+    return;
+  }
+  
+  float elapsedHours = elapsedTime / 3600000.0;
+  float consumedMah = BATTERY_AVERAGE_CURRENT_MA * elapsedHours;
+  
+  batteryRemainingMah -= consumedMah;
+  if (batteryRemainingMah < 0) batteryRemainingMah = 0;
+  
+  if (!batteryPrefs.begin("battery", false)) {
+    Serial.println("[ERROR] Failed to save battery to NVS!");
+    return;
+  }
+  batteryPrefs.putFloat("remaining", batteryRemainingMah);
+  batteryPrefs.end();
+  
+  lastBatteryUpdate = currentTime;
+  
+  Serial.print("[Battery] Consumed: ");
+  Serial.print(consumedMah, 4);
+  Serial.print(" mAh | Remaining: ");
+  Serial.print(batteryRemainingMah, 2);
+  Serial.print(" mAh (");
+  Serial.print((int)((batteryRemainingMah / BATTERY_FULL_CAPACITY_MAH) * 100));
+  Serial.println("%)");
+  
+  if (batteryRemainingMah <= BATTERY_CRITICAL_MAH) {
+    Serial.println("[WARNING] CRITICAL BATTERY LEVEL!");
+  } else if (batteryRemainingMah <= BATTERY_LOW_MAH && !lowBatteryWarningShown) {
+    Serial.println("[WARNING] Low battery! Please charge soon.");
+    lowBatteryWarningShown = true;
+  }
+}
+
+void displayBatteryStatus(bool bluetoothConnected) {
+  int batteryX = bluetoothConnected ? 88 : 108;
+  int batteryY = 2;
+  
+  u8g2.drawFrame(batteryX, batteryY, 14, 8);
+  u8g2.drawBox(batteryX + 14, batteryY + 2, 2, 4);
+  
+  int percentage = (int)((batteryRemainingMah / BATTERY_FULL_CAPACITY_MAH) * 100);
+  int bars = 0;
+  if (percentage >= 75) bars = 4;
+  else if (percentage >= 50) bars = 3;
+  else if (percentage >= 25) bars = 2;
+  else if (percentage > 10) bars = 1;
+  else bars = 0;
+  
+  int barStartX = batteryX + 2;
+  int barStartY = batteryY + 2;
+  
+  for (int i = 0; i < bars; i++) {
+    int barX = barStartX + (i * 3);
+    u8g2.drawBox(barX, barStartY, 2, 4);
+  }
+  
+  if (batteryRemainingMah <= BATTERY_CRITICAL_MAH) {
+    if ((millis() / 500) % 2 == 0) {
+      u8g2.drawFrame(batteryX - 1, batteryY - 1, 16, 10);
+      if (bars == 0) {
+        u8g2.drawLine(batteryX + 6, batteryY + 2, batteryX + 6, batteryY + 4);
+        u8g2.drawPixel(batteryX + 6, batteryY + 6);
+      }
+    }
+  }
+}
+
+void handleBatteryReset() {
+  bool buttonPressed = (digitalRead(BTN_CYCLE) == LOW);
+  
+  if (buttonPressed) {
+    if (!batteryResetButtonPressed) {
+      batteryResetPressStart = millis();
+      batteryResetButtonPressed = true;
+    } else {
+      unsigned long holdDuration = millis() - batteryResetPressStart;
+      
+      if (holdDuration >= BATTERY_RESET_HOLD_TIME_MS) {
+        batteryRemainingMah = BATTERY_FULL_CAPACITY_MAH;
+        
+        if (!batteryPrefs.begin("battery", false)) {
+          Serial.println("[ERROR] Failed to reset battery in NVS!");
+          return;
+        }
+        batteryPrefs.putFloat("remaining", batteryRemainingMah);
+        batteryPrefs.end();
+        
+        lowBatteryWarningShown = false;
+        batteryResetButtonPressed = false;
+        
+        u8g2.clearBuffer();
+        u8g2.setFont(u8g2_font_helvB10_tr);
+        const char* msg = "Battery Reset!";
+        int msgX = (128 - u8g2.getStrWidth(msg)) / 2;
+        u8g2.setCursor(msgX, 32);
+        u8g2.print(msg);
+        u8g2.sendBuffer();
+        delay(1500);
+        
+        Serial.println("========================================");
+        Serial.println("Battery Reset to Full Capacity");
+        Serial.println("========================================");
+        
+        if (foundNetworks > 0) {
+          showNetwork(currentIndex);
+        }
+      }
+    }
+  } else {
+    batteryResetButtonPressed = false;
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -123,6 +294,9 @@ void setup() {
   Serial.println("Waiting for app connections...");
   Serial.println();
 
+  // Initialize Battery Management
+  initBattery();
+
   // Initial scan and display first network
   scanNetworks();
   if (foundNetworks > 0) {
@@ -137,6 +311,12 @@ void loop() {
   
   // Handle TCP connections and Live Scan
   handleTCPConnection();
+
+  // Update battery consumption
+  updateBatteryConsumption();
+  
+  // Handle battery reset via long button press
+  handleBatteryReset();
 
   // Periodic TCP server status debug
   static unsigned long lastStatus = 0;
@@ -197,10 +377,14 @@ void checkStationConnection() {
     int16_t y = 48; // Below the checkmark
     u8g2.setCursor(x, y);
     u8g2.print(msg);
-    u8g2.sendBuffer();
     
-    // Reset draw color back to normal
+    // Reset draw color back to normal (needed before drawing battery)
     u8g2.setDrawColor(1);
+    
+    // Display battery icon on connection screen
+    displayBatteryStatus(true); // Bluetooth is connected
+    
+    u8g2.sendBuffer();
     
     wasConnected = true;
   }
@@ -312,6 +496,11 @@ void startLiveScan() {
   u8g2.setFont(u8g2_font_6x10_tr);
   u8g2.setCursor((128 - u8g2.getStrWidth("Live Scan Active")) / 2, 32);
   u8g2.print("Live Scan Active");
+  
+  // Display battery icon during live scan
+  bool bluetoothConnected = (WiFi.softAPgetStationNum() > 0);
+  displayBatteryStatus(bluetoothConnected);
+  
   u8g2.sendBuffer();
 }
 
@@ -328,9 +517,15 @@ void stopLiveScan() {
 }
 
 void sendBatteryStatus() {
-  // Battery monitoring removed - no longer supported
-  client.println("BATTERY:0:0:N/A");
-  Serial.println("Battery status request received (not supported)");
+  int percentage = (int)((batteryRemainingMah / BATTERY_FULL_CAPACITY_MAH) * 100);
+  String status = (batteryRemainingMah <= BATTERY_LOW_MAH) ? "LOW" : "OK";
+  
+  String response = "BATTERY:" + String(percentage) + ":" + 
+                    String(batteryRemainingMah, 2) + ":" + status;
+  client.println(response);
+  
+  Serial.print("Battery status sent: ");
+  Serial.println(response);
 }
 
 void performLiveScan() {
@@ -494,6 +689,9 @@ String translateEncryptionType(wifi_auth_mode_t type) {
     case WIFI_AUTH_WPA2_PSK: return "WPA2";
     case WIFI_AUTH_WPA_WPA2_PSK: return "WPA/WPA2";
     case WIFI_AUTH_WPA2_ENTERPRISE: return "Enterprise";
+    case WIFI_AUTH_WPA3_PSK: return "WPA3";
+    case WIFI_AUTH_WPA2_WPA3_PSK: return "WPA2/WPA3";
+    case WIFI_AUTH_WPA3_ENTERPRISE: return "WPA3-Enterprise";
     default: return "Unknown";
   }
 }
@@ -512,9 +710,15 @@ void showNetwork(int index) {
   
   // === OPTIMIZED DISPLAY LAYOUT ===
   
-  // Bluetooth Icon (Top Right Corner) - Show when WiFi station connected
+  // Battery and Bluetooth Icons (Top Right)
   int numStations = WiFi.softAPgetStationNum();
-  if (numStations > 0) {
+  bool bluetoothConnected = (numStations > 0);
+  
+  // Display battery icon (positioned based on Bluetooth status)
+  displayBatteryStatus(bluetoothConnected);
+  
+  // Display Bluetooth icon if connected
+  if (bluetoothConnected) {
     drawBluetoothIcon(110, 2);
   }
   
@@ -606,7 +810,8 @@ String getSafetyLevel(String encryption) {
   if (encryption == "WEP") return "RISKY";
   if (encryption == "WPA") return "OKAY";
   if (encryption == "WPA2" || encryption == "WPA/WPA2") return "SAFE TO USE";
-  if (encryption == "Enterprise") return "VERY SAFE";
+  if (encryption == "WPA3" || encryption == "WPA2/WPA3") return "VERY SAFE";
+  if (encryption == "Enterprise" || encryption == "WPA3-Enterprise") return "VERY SAFE";
   return "UNKNOWN";
 }
 
@@ -616,7 +821,8 @@ String getSafetyIcon(String encryption) {
   if (encryption == "WEP") return "[~]"; // Caution
   if (encryption == "WPA") return "[+]"; // Okay
   if (encryption == "WPA2" || encryption == "WPA/WPA2") return "[*]"; // Good
-  if (encryption == "Enterprise") return "[**]"; // Excellent
+  if (encryption == "WPA3" || encryption == "WPA2/WPA3") return "[**]"; // Excellent
+  if (encryption == "Enterprise" || encryption == "WPA3-Enterprise") return "[**]"; // Excellent
   return "[?]";
 }
 
@@ -664,7 +870,8 @@ String getSimpleSecurity(String encryption) {
   if (encryption == "WEP") return "Weak";
   if (encryption == "WPA") return "Basic";
   if (encryption == "WPA2" || encryption == "WPA/WPA2") return "Protected";
-  if (encryption == "Enterprise") return "Maximum";
+  if (encryption == "WPA3" || encryption == "WPA2/WPA3") return "Strong";
+  if (encryption == "Enterprise" || encryption == "WPA3-Enterprise") return "Maximum";
   return "Unknown";
 }
 
@@ -673,7 +880,8 @@ String getRiskLevel(String encryption) {
   if (encryption == "WEP") return "Medium";
   if (encryption == "WPA") return "Medium";
   if (encryption == "WPA2" || encryption == "WPA/WPA2") return "Low";
-  if (encryption == "Enterprise") return "Very Low";
+  if (encryption == "WPA3" || encryption == "WPA2/WPA3") return "Very Low";
+  if (encryption == "Enterprise" || encryption == "WPA3-Enterprise") return "Very Low";
   return "Unknown";
 }
 
