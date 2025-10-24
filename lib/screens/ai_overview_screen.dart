@@ -297,33 +297,48 @@ Keep response clear and user-friendly (max 250 words). Focus on practical securi
     
     final caps = capabilities.toUpperCase();
     
-    // Check for specific security protocols (order matters - check strongest first)
-    if (caps.contains('WPA3')) return 'WPA3';
-    if (caps.contains('WPA2')) return 'WPA2';
-    if (caps.contains('WPA')) return 'WPA';
+    // Enhanced security protocol detection
+    if (caps.contains('WPA3')) return 'WPA3-Personal';
+    if (caps.contains('WPA2') && caps.contains('WPA3')) return 'WPA3-Personal/WPA2-Personal';
+    if (caps.contains('WPA2')) {
+      if (caps.contains('ENTERPRISE')) return 'WPA2-Enterprise';
+      return 'WPA2-Personal';
+    }
+    if (caps.contains('WPA')) {
+      if (caps.contains('ENTERPRISE')) return 'WPA-Enterprise';
+      return 'WPA-Personal';
+    }
     if (caps.contains('WEP')) return 'WEP';
     
+    // Check for security indicators that might be present with WPA3
+    if (caps.contains('RSN') || caps.contains('SAE') || caps.contains('CCMP') || 
+        caps.contains('PSK') || caps.contains('EAP')) {
+      return 'WPA3-Personal'; // Assume WPA3 if modern security indicators are present
+    }
+    
     // If only ESS, WPS, or other non-security capabilities are present, it's Open
-    // ESS = Extended Service Set (infrastructure mode indicator)
-    // WPS = Wi-Fi Protected Setup (convenience feature)
-    // These are NOT security types
-    if (caps.contains('ESS') || caps.contains('WPS')) {
+    if (caps.contains('ESS') || caps.contains('WPS') || caps.contains('IBSS')) {
       // Check if there are any actual security indicators
       final hasSecurityProtocol = caps.contains('WPA') || 
-                                  caps.contains('WEP') || 
-                                  caps.contains('PSK') || 
-                                  caps.contains('EAP');
+                                 caps.contains('WEP') || 
+                                 caps.contains('PSK') || 
+                                 caps.contains('EAP') ||
+                                 caps.contains('RSN') ||
+                                 caps.contains('SAE') ||
+                                 caps.contains('CCMP');
       if (!hasSecurityProtocol) {
         return 'Open';
       }
+      return 'WPA3-Personal'; // If we have security indicators but no explicit WPA version
     }
     
-    // If capabilities string is Unknown or unrecognized, treat as Open for safety
+    // If capabilities string is Unknown or unrecognized, be more conservative
     if (caps == 'UNKNOWN' || caps == 'NONE') {
-      return 'Open';
+      return 'Unknown';
     }
     
-    return 'Unknown';
+    // If we get here and the SSID is not empty, assume it's secured rather than open
+    return 'WPA3-Personal';
   }
 
   String _getRiskLevel(String security) {

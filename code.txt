@@ -166,10 +166,9 @@ void displayBatteryStatus(bool bluetoothConnected) {
   
   int percentage = (int)((batteryRemainingMah / BATTERY_FULL_CAPACITY_MAH) * 100);
   int bars = 0;
-  if (percentage >= 75) bars = 4;
-  else if (percentage >= 50) bars = 3;
-  else if (percentage >= 25) bars = 2;
-  else if (percentage > 10) bars = 1;
+  if (percentage > 66) bars = 3;
+  else if (percentage > 33) bars = 2;
+  else if (percentage > 0) bars = 1;
   else bars = 0;
   
   int barStartX = batteryX + 2;
@@ -770,15 +769,20 @@ void showNetwork(int index) {
   
   // Bottom Row: Security and Risk (Side by side)
   u8g2.setFont(u8g2_font_5x7_tr); // Smaller font for bottom info
-  u8g2.setCursor(0, 62);
-  u8g2.print("Sec: ");
-  u8g2.print(simpleSecurity);
   
-  // Risk on the right side
-  String riskText = "Risk: " + riskLevel;
-  int riskX = 128 - u8g2.getStrWidth(riskText.c_str());
-  u8g2.setCursor(riskX, 62);
-  u8g2.print(riskText);
+  // Display only the encryption type
+  String secText = simpleSecurity;
+  u8g2.setCursor(0, 62);
+  u8g2.print(secText);
+  
+  // Risk on the right side (only if there's enough space)
+  int minSpace = 30; // Minimum pixels needed for risk text
+  if (128 - u8g2.getStrWidth(secText.c_str()) > minSpace) {
+    String riskText = "Risk: " + riskLevel;
+    int riskX = 128 - u8g2.getStrWidth(riskText.c_str());
+    u8g2.setCursor(riskX, 62);
+    u8g2.print(riskText);
+  }
   
   u8g2.sendBuffer();
 }
